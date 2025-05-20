@@ -1,0 +1,9 @@
+numpy
+scipy
+pandas
+scikit-learn
+fastdtw
+PyQt6
+reportlab
+scikit-optimize
+pyinstaller
