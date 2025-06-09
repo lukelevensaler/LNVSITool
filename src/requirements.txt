@@ -1,0 +1,19 @@
+# Data Science 
+numpy
+scipy
+fastdtw
+lmfit
+statsmodels
+
+# ML
+pandas
+scikit-learn
+scikit-optimize
+
+# GUI
+PyQt6
+reportlab
+
+# Compilation
+pyinstaller
+
