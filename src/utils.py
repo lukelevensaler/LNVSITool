@@ -1,6 +1,7 @@
 # Basic Imports
 import logging
 import csv
+import os
 
 # Data Science Imports
 import pandas as pd
@@ -141,18 +142,22 @@ class ExportFindings:
                 return
             options = QFileDialog.Option.DontUseNativeDialog
             exported = False
-            sidebar_locations = qfiledialog__pinned_locations()
+            # Always use user's Downloads directory
+            downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            sidebar_locations = [QUrl.fromLocalFile(downloads_dir)]
             if fmt == 'csv':
-                file_dialog = QFileDialog(self.ui, "Save Results as CSV", "results.csv", "CSV Files (*.csv)")
+                file_dialog = QFileDialog(self.ui, "Save Results as CSV", os.path.join(downloads_dir, "results.csv"), "CSV Files (*.csv)")
                 file_dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
                 file_dialog.setOptions(options)
-                if sidebar_locations:
-                    file_dialog.setSidebarUrls(sidebar_locations)
+                file_dialog.setDirectory(downloads_dir)
+                file_dialog.setSidebarUrls(sidebar_locations)
                 if file_dialog.exec():
                     file_path = file_dialog.selectedFiles()[0]
                 else:
                     file_path = ''
                 if file_path:
+                    # Force file_path to be in Downloads
+                    file_path = os.path.join(downloads_dir, os.path.basename(file_path))
                     with open(file_path, 'w', newline='') as f:
                         writer = csv.writer(f)
                         writer.writerow(headers)
@@ -160,16 +165,17 @@ class ExportFindings:
                     QMessageBox.information(self.ui, "Export Complete", f"Results exported as CSV to:\n{file_path}")
                     exported = True
             elif fmt == 'pdf':
-                file_dialog = QFileDialog(self.ui, "Save Results as PDF", "results.pdf", "PDF Files (*.pdf)")
+                file_dialog = QFileDialog(self.ui, "Save Results as PDF", os.path.join(downloads_dir, "results.pdf"), "PDF Files (*.pdf)")
                 file_dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
                 file_dialog.setOptions(options)
-                if sidebar_locations:
-                    file_dialog.setSidebarUrls(sidebar_locations)
+                file_dialog.setDirectory(downloads_dir)
+                file_dialog.setSidebarUrls(sidebar_locations)
                 if file_dialog.exec():
                     file_path = file_dialog.selectedFiles()[0]
                 else:
                     file_path = ''
                 if file_path:
+                    file_path = os.path.join(downloads_dir, os.path.basename(file_path))
                     doc = SimpleDocTemplate(file_path, pagesize=landscape(letter))
                     elements = []
                     style = getSampleStyleSheet()["Normal"]
@@ -184,25 +190,25 @@ class ExportFindings:
                         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                         ('FONTNAME', (0,0), (-1,0), font_name),
                         ('BOTTOMPADDING', (0,0), (-1,0), 12),
-                        ('BACKGROUND', (0,1), (-1,-1), colors.blue),
+                        ('BACKGROUND', (0,1), (-1,-1), colors.Color(0.88, 0.96, 1)), # very light sky blue
                         ('GRID', (0,0), (-1,-1), 1, colors.black),
                     ]))
                     elements.append(t)
                     doc.build(elements)
                     QMessageBox.information(self.ui, "Export Complete", f"Results exported as PDF to:\n{file_path}")
                     exported = True
-                    
             elif fmt == 'xlsx':
-                file_dialog = QFileDialog(self.ui, "Save Results as XLSX", "results.xlsx", "Excel Files (*.xlsx)")
+                file_dialog = QFileDialog(self.ui, "Save Results as XLSX", os.path.join(downloads_dir, "results.xlsx"), "Excel Files (*.xlsx)")
                 file_dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
                 file_dialog.setOptions(options)
-                if sidebar_locations:
-                    file_dialog.setSidebarUrls(sidebar_locations)
+                file_dialog.setDirectory(downloads_dir)
+                file_dialog.setSidebarUrls(sidebar_locations)
                 if file_dialog.exec():
                     file_path = file_dialog.selectedFiles()[0]
                 else:
                     file_path = ''
                 if file_path:
+                    file_path = os.path.join(downloads_dir, os.path.basename(file_path))
                     df = pd.DataFrame(data, columns=headers)
                     df.to_excel(file_path, index=False)
                     QMessageBox.information(self.ui, "Export Complete", f"Results exported as XLSX to:\n{file_path}")
