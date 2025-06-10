@@ -101,6 +101,7 @@ class UI(QMainWindow):
             logging.error(f"Error setting background: {e}")
 
     def resizeEvent(self, event):
+
         """
         Ensure the background image always expands to fit the window, including on resize/fullscreen.
         """
@@ -109,17 +110,21 @@ class UI(QMainWindow):
             self.background_label.setGeometry(0, 0, self.width(), self.height())
 
     def render_ui(self):
+
         self.setup_background()
         # Set welcome_container to be centered with margins (middle third of window)
         self.welcome_container = QWidget(self)
-        self.main_layout.addWidget(self.welcome_container, alignment=Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
-        # Remove fixed size for welcome_container for better layout
-        # self.welcome_container.setFixedSize(600, 400)
+        self.main_layout.addWidget(
+            self.welcome_container, 
+            alignment=
+            Qt.AlignmentFlag.AlignHCenter | 
+            Qt.AlignmentFlag.AlignVCenter
+        )
 
         self.welcome_layout = QVBoxLayout(self.welcome_container)
         self.welcome_container.setLayout(self.welcome_layout)
 
-        # Main welcome label (top-aligned, wide)
+        # Main welcome label (HTML Rich Text))(top-aligned, wide)
         self.welcome_label = QLabel(
             '<span class="main-title">Welcome to the LNVSI Tool (version alpha-testing)!</span><br>'
             '<span class="subtitle">Created by Luke Levensaler, 2025</span>'
@@ -158,7 +163,9 @@ class UI(QMainWindow):
         self.sub_welcome_label.setWordWrap(True)
         self.welcome_layout.addWidget(
             self.sub_welcome_label,
-            alignment=Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+            alignment=
+            Qt.AlignmentFlag.AlignHCenter | 
+            Qt.AlignmentFlag.AlignVCenter
         )
 
         # Upload CSV Button (bottom, rounded corners via QSS)
@@ -171,7 +178,9 @@ class UI(QMainWindow):
         self.upload_button.clicked.connect(self.confirm_csv_upload)
         self.welcome_layout.addWidget(
             self.upload_button,
-            alignment=Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom
+            alignment=
+            Qt.AlignmentFlag.AlignHCenter | 
+            Qt.AlignmentFlag.AlignBottom
         )
         self.upload_button.setEnabled(True)  # Always ensure enabled on UI render
 
@@ -227,14 +236,7 @@ class UI(QMainWindow):
             self.main_layout.removeWidget(self.welcome_container)
             self.welcome_container.setParent(None)
             self.welcome_container.deleteLater()
-            self.welcome_container = None
-
-        # Create a new container for the data analysis with same dimensions as previous welcome_container
-        margin_top_bottom = 60
-        margin_sides = int(self.width() * 1/3)
-        container_width = self.width() - 2 * margin_sides
-        container_height = self.height() - 2 * margin_top_bottom
-    
+            self.welcome_container = None    
 
         # Data analysis container: white, rounded corners, no border
         self.data_analysis_container = QWidget(self)
@@ -254,9 +256,10 @@ class UI(QMainWindow):
 
         # Add a horizontal line (QFrame) after the label for separation (always add here)
         self.line = QFrame()
-        self.line.setObjectName("line")
+        self.line.setObjectName("analysisLine")
         self.line.setFrameShape(QFrame.Shape.HLine)
         self.line.setFrameShadow(QFrame.Shadow.Sunken)
+
         # Style via QSS only
         self.data_analysis_layout.addWidget(self.line)
 
@@ -284,6 +287,7 @@ class UI(QMainWindow):
         # Ensure analysis_progress_bar is created before set_splash_text is called
         self.progress_label = QLabel(self.splash_text)
         self.progress_label.setObjectName("progressLabel")
+
         # Font via QSS only
         self.progress_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom)
         self.progress_label.setFixedHeight(40)
@@ -363,7 +367,7 @@ class UI(QMainWindow):
         elif 65 <= progress < 70:
             splash = "Computing Similarity Metrics..."
         elif 70 <= progress < 75:
-            splash = "Calculating AUC and Statistics..."
+            splash = "Determining Composite Similarity Scores..."
         elif 75 <= progress < 80:
             splash = "Running Statistical Tests..."
         elif 80 <= progress < 90:
@@ -373,7 +377,7 @@ class UI(QMainWindow):
         elif 95 <= progress < 100:
             splash = "Finalizing Analysis..."
         elif progress == 100:
-            splash = "Finalizing Results..."
+            splash = "Algorithm Returned Valid Results!..."
             # Only show results screen once
             if not self._showing_results:
                 self._showing_results = True
@@ -430,7 +434,7 @@ class UI(QMainWindow):
 
         # Add a top label for the results screen, centered with breathing room and QSS dash style
         self.results_label = QLabel("Algorithm Output - Results")
-        self.results_label.setObjectName("resultLabel")
+        self.results_label.setObjectName("resultsLabel")
         self.results_label.setFixedHeight(50)
         self.results_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         self.results_layout.addWidget(self.results_label)
@@ -526,7 +530,7 @@ class UI(QMainWindow):
         button_row.setContentsMargins(0, 30, 0, 0)
         button_row.setSpacing(24)
         self.download_button = QPushButton("Select Method of Exporting Results")
-        self.download_button.setObjectName("downloadButton")
+        self.download_button.setObjectName("downloadUILaunchButton")
         self.download_button.setMinimumWidth(220)
         self.download_button.setMaximumWidth(340)
         self.download_button.setMinimumHeight(60)

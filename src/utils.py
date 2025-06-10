@@ -107,17 +107,23 @@ class ExportFindings:
         self.ui.results_layout.insertWidget(1, self.ui.results_portal)
 
         # Export options label
-        export_label = QLabel("Select Export Format:")
+        export_label = QLabel(
+            "Export Your Results! 🎉:"
+        )
         export_label.setObjectName("exportLabel")
         export_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         self.ui.results_portal_layout.addWidget(export_label)
 
-        # Export buttons row
+        # Create export options buttons
         export_row = QHBoxLayout()
         export_row.setSpacing(24)
         btn_csv = QPushButton("Export as CSV")
+        btn_csv.setObjectName("exportCSVButton")
         btn_pdf = QPushButton("Export as PDF")
+        btn_pdf.setObjectName("exportPDFButton")
         btn_xlsx = QPushButton("Export as XLSX")
+        btn_xlsx.setObjectName("exportXLSXButton")
+
         for btn in [btn_csv, btn_pdf, btn_xlsx]:
             btn.setFixedSize(200, 60)
             export_row.addWidget(btn)
@@ -223,7 +229,7 @@ class ExportFindings:
                         widget.deleteLater()
                 # Add Finish button
                 self.finish_button = QPushButton("Finish")
-                self.finish_button.setObjectName("downloadButton")
+                self.finish_button.setObjectName("finishButton") 
                 self.finish_button.setFixedSize(250, 60)
                 self.finish_button.clicked.connect(self.ui.rh.return_home_from_sucess)
                 self.ui.results_portal_layout.addWidget(self.finish_button, alignment=Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
