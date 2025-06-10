@@ -11,9 +11,9 @@ from statsmodels.stats.multitest import multipletests
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout,
     QWidget, QLabel, QPushButton, QFileDialog, 
-    QMessageBox
+    QMessageBox, 
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QUrl
 
 # ReportLab Imports (for PDF generation from results)
 from reportlab.lib.pagesizes import letter, landscape

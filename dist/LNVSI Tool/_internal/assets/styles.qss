@@ -1,0 +1,283 @@
+/* 
+
+Global Stylesheet for LNVSI Tool Application 
+PyQt6-based GUI 
+(version: alpha-testing) 
+By Luke Levensaler
+
+*/
+
+
+/* --- MAIN CONTAINERS --- */
+QWidget#welcomeContainer, 
+QWidget#dataAnalysis, 
+QWidget#resultsContainer {
+    
+    background: #ceffffff;
+    border: 2px solid #111;
+    border-radius: 24px;
+    padding: 32px;
+}
+QWidget#resultsWidget {
+    background: #cdffffff;
+    border-radius: 16px;
+    border: 2px solid #052146;
+    padding: 16px;
+}
+
+/* --- VARIOUS CONTAINER UI CHILD ATTRIBUTES --- */
+
+QLabel, QTableWidget, QTableWidget QHeaderView::section, QTableWidget QTableCornerButton::section, QTableWidget QTableView::item {
+    font-family: 'Inter', 'Segoe UI', 'Verdana', 'Arial', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    spacing: 0.02em;
+}
+QLabel#progressLabel, 
+QLabel#resultLabel, 
+QLabel#countdownTimerLabel {
+
+    font-family: 'Fira Sans', 'Segoe UI', 'Verdana', Arial, sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    spacing: 0.03em;
+}
+QLabel#welcomeLabel {
+    font-family: 'Montserrat', 'Arial Black', Arial, sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    color: #fff;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #001f4d, stop:1 #003366);
+    border: 3px solid #888; /* Gray border */
+    border-radius: 18px;
+    padding: 18px 32px;
+    min-width: 700px;
+    max-width: 1200px;
+    min-height: 120px;
+    max-height: 220px;
+    margin-top: 8px;
+    margin-bottom: 36px;
+    text-align: center;
+    spacing: 0.04em;
+}
+QLabel#welcomeLabel .main-title {
+    font-family: 'Montserrat', 'Arial Black', Arial, sans-serif;
+    font-size: 28pt;
+    font-weight: 900;
+    color: #ffffff;
+    spacing: 0.05em;
+}
+QLabel#welcomeLabel .subtitle {
+    font-family: 'Fira Sans', 'Segoe UI', 'Verdana', Arial, sans-serif;
+    font-size: 14pt;
+    font-weight: 400;
+    color: #e0e0e0;
+    spacing: 0.02em;
+}
+QLabel#subWelcomeLabel {
+    font-family: 'Fira Sans', 'Segoe UI', 'Verdana', Arial, sans-serif;
+    color: #111;
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.8, fx:0.5, fy:0.5, stop:0 #f8f8f8, stop:0.5 #e0e0e0, stop:1 #b0b4b8);
+    border: 2px solid #000;
+    border-radius: 10px;
+    padding: 16px 32px;
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 48px;
+    margin-top: 0;
+    min-width: 400px;
+    max-width: 900px;
+    spacing: 0.01em;
+}
+
+/* --- TABLE --- */
+QTableWidget#resultsTable {
+    background: #fff;
+    border: 3px solid #000;
+    padding: 10px;
+    gridline-color: #444;
+    margin-left: auto;
+    margin-right: auto;
+}
+QTableWidget#resultsTable QHeaderView::section {
+    background: #f0f0f0;
+    color: #222;
+    font-weight: bold;
+    border: 1px solid #444;
+    padding: 6px 4px;
+}
+QTableWidget#resultsTable QTableCornerButton::section {
+    background: #f0f0f0;
+    border: 1px solid #444;
+}
+QTableWidget#resultsTable QTableView::item {
+    background: #fff;
+    border: 1px solid #bbb;
+}
+QWidget#resultsWidget QTableWidget#resultsTable {
+    qproperty-alignment: AlignHCenter | AlignVCenter;
+}
+
+QMessageBox{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #e0f7fa, stop:0.5 #4fc3f7, stop:1 #1976d2);
+    border-radius: 18px;
+    padding: 24px;
+    font-family: 'Verdana', 'Arial', sans-serif;
+    font-size: 15px;
+}
+
+/* --- BUTTONS --- */
+
+QPushButton {
+    min-width: 220px;
+    max-width: 340px;
+    min-height: 60px;
+    max-height: 80px;
+    border-radius: 16px;
+    border: 2px solid #111;
+    font-size: 1.1em;
+    font-family: 'Montserrat', 'Segoe UI', 'Verdana', Arial, sans-serif;
+    font-weight: 700;
+    text-align: center;
+    spacing: 0.03em;
+    background: #f7f7f7;
+    color: #222;
+    
+}
+
+QPushButton#downloadButton {
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.8, fx:0.5, fy:0.5, stop:0 #e3f2fd, stop:1 #1976d2);
+    border: 2px solid #1976d2;
+    color: #111;
+}
+QPushButton#discardButton {
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.8, fx:0.5, fy:0.5, stop:0 #fffefa, stop:1 #ff5252);
+    border: 2px solid #ff5252;
+    color: #111;
+}
+QPushButton#cancelButton {
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.8, fx:0.5, fy:0.5, stop:0 #fffde7, stop:1 #ffd600);
+    border: 2px solid #ffd600;
+    color: #222;
+}
+QPushButton#uploadButton {
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.8, fx:0.5, fy:0.5, stop:0 #e3f2fd, stop:1 #43a047);
+    border: 2px solid #111;
+    color: #222;
+    margin-top: 48px;
+    margin-bottom: 24px;
+}
+QPushButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #00e0ff, stop:1 #1976d2);
+    color: #fff;
+    border-color: #00e0ff;
+    border-radius: 16px;
+}
+QPushButton:pressed {
+    background: #111;
+    color: #ffeb3b;
+    border-color: #ffeb3b;
+    border-radius: 16px;
+}
+QPushButton:disabled {
+    color: #888;
+    background: #ededed;
+    border-color: #888;
+    border-radius: 16px;
+}
+
+QPushButton#downloadButton:hover, 
+QPushButton#discardButton:hover, 
+QPushButton#cancelButton:hover, 
+QPushButton#uploadButton:hover, 
+QPushButton#exportButton:hover {
+
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #00e0ff, stop:1 #1976d2);
+    color: #fff;
+    border-color: #00e0ff;
+    border-radius: 16px;
+}
+
+QPushButton#downloadButton:pressed, 
+QPushButton#discardButton:pressed, 
+QPushButton#cancelButton:pressed, 
+QPushButton#uploadButton:pressed, 
+QPushButton#exportButton:pressed {
+
+    background: #111;
+    color: #ffeb3b;
+    border-color: #ffeb3b;
+    border-radius: 16px;
+}
+
+QPushButton#downloadButton:disabled, 
+QPushButton#discardButton:disabled, 
+QPushButton#cancelButton:disabled, 
+QPushButton#uploadButton:disabled {
+    color: #888;
+    background: #ededed;
+    border-color: #888;
+    border-radius: 16px;
+}
+
+
+/* --- PROGRESS BAR --- */
+QProgressBar {
+    border: 1.5px solid #222;
+    border-radius: 8px;
+    background-color: #f7f7f7;
+    text-align: center;
+    height: 16px;
+    min-height: 12px;
+    max-height: 22px;
+    font-size: 13px;
+}
+QProgressBar::chunk {
+    border-radius: 8px;
+    background: qlineargradient(x1:0, y1:1, x2:1, y2:0, stop:0 #4fc3f7, stop:0.5 #1976d2, stop:1 #64b5f6);
+    margin: 1px;
+}
+QWidget#progressContainer, 
+QWidget#progressWidget {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+}
+
+/* --- MESSAGE BOX --- */
+QMessageBox {
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.9, fx:0.5, fy:0.5, stop:0 #e0f7fa, stop:0.5 #4fc3f7, stop:1 #1976d2);
+    border: 2px solid #00bcd4;
+    border-radius: 18px;
+    padding: 24px;
+    color: #ffffff;
+    font-family: 'Fira Sans', 'Segoe UI', 'Verdana', 'Arial', sans-serif;
+    font-size: 16px;
+    spacing: 0.02em;
+}
+
+/* --- COUNTDOWN TIMER --- */
+QLabel#countdownTimerLabel {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #87ceeb, stop:1 #00bfff);
+    color: black;
+    border: 2px solid #000;
+    border-radius: 16px;
+    font-family: 'Arial Black';
+    font-size: 15px;
+    font-weight: bold;
+    padding: 4px 12px;
+}
+
+/* --- HORIZONTAL LINES --- */
+QWidget#dataAnalysis, QLabel#analysisLabel + QFrame#line,
+QWidget#dataAnalysis, QLabel#finalResultLabel + QFrame#line {
+    border: none;
+    border-top: 2px dashed #000000;
+    margin-left: 60%;
+    margin-right: 0;
+    margin-top: 8px;
+    margin-bottom: 16px;
+    height: 2px;
+}
+

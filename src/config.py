@@ -56,8 +56,12 @@ AUTO_SAVE_FILE = os.path.join(autosave_dir, "autosave.json") # CALLED IN OTHER M
 assets_dir = os.path.join(project_root, "assets")
 
 def resource_path(filename): # CALLED IN OTHER MODULES
-    """Get the full path to an asset in the assets directory."""
-    return os.path.join(assets_dir, filename)
+    if hasattr(sys, '_MEIPASS'):
+        # Running in a PyInstaller bundle
+        return os.path.join(sys._MEIPASS, "assets", filename)
+    else:
+        # Running in development
+        return os.path.join(assets_dir, filename)
 
 def qfiledialog__pinned_locations(): # CALLED IN OTHER MODULES 
     """ Get and pin the locations for QFileDialog instances. """
