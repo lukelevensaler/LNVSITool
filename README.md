@@ -71,7 +71,7 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
         ```
 
     
-## Usage without compilation
+## Usage Without Compilation
 
 1. Clone the repository:
    ```sh
@@ -108,6 +108,9 @@ python src/main.py
 ## Exported Results
 
 - All exports (CSV, PDF, XLSX) are saved to your Downloads directory by default.
+
+## Full Documentation
+- https://docs.conowareproject.org
 
 ## License
 See [info/LICENSE.md](info/LICENSE.md)
