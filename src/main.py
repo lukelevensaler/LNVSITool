@@ -39,7 +39,7 @@ logging.basicConfig(
 class UI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ConoWare Levensaler Neogastropod Venomic Similarity Indexing Tool (version: alpha-testing)")
+        self.setWindowTitle("ConoWare Levensaler Neogastropod Venomic Similarity Indexing Tool (Beta)")
         self.setGeometry(100, 100, 800, 600)
         self.setMinimumSize(1000, 800)
        
@@ -126,7 +126,7 @@ class UI(QMainWindow):
 
         # Main welcome label (HTML Rich Text))(top-aligned, wide)
         self.welcome_label = QLabel(
-            '<span class="main-title">Welcome to the LNVSI Tool (version alpha-testing)!</span><br>'
+            '<span class="main-title">Welcome to the LNVSI Tool (Beta)!</span><br>'
             '<span class="subtitle">Created by Luke Levensaler, 2025</span>'
         )
         self.welcome_label.setObjectName("welcomeLabel")
