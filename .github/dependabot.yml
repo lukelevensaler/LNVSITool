@@ -5,7 +5,13 @@
 
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
-    directory: "/venv" # Location of package manifests
+  - package-ecosystem: "pip"
+    directory: "/src"
     schedule:
       interval: "weekly"
+    allow:
+      - dependency-type: "all"
+    # (no limits on open dep update PRs)
+    commit-message:
+      prefix: "deps"
+      include: "scope"
