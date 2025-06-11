@@ -16,24 +16,24 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
 
 ## Installation From Source
 
-1. Clone the repository:
+1. **Clone the repository:**
    ```sh
    git clone https://github.com/lukelevensaler/LNVSITool.git
    cd LNVSITool
    ```
 
-2. Create and activate a virtual environment:
+2. **Create and activate a virtual environment:**
    ```sh
    python3 -m venv venv
    source venv/bin/activate  # or 'venv\Scripts\activate' on Windows
    ```
 
-3. Install dependencies:
+3. **Install dependencies:**
    ```sh
    pip install -r src/requirements.txt
    ```
 
-4. Compile with PyInstaller:
+4. **Compile with PyInstaller:**
     ```sh
     pyinstaller --windowed --name "LNVSI Tool" --icon=assets/icon.icns --add-data "assets:assets" src/main.py
     ```
@@ -95,11 +95,6 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
 python src/main.py
 ```
 
-
-### Linux/Windows
-- Run PyInstaller on the target OS. See [PyInstaller docs](https://pyinstaller.org/) for details.
-- For Linux desktop integration, create a `.desktop` file and/or `.deb` package as needed.
-
 ## File Structure
 - `src/` — Main application code
 - `assets/` — Icons, images, stylesheets
@@ -108,7 +103,7 @@ python src/main.py
 
 ## Logging
 
-- Logs and Autosave file can be found in the LNSVI Tool Utilities Directory the application creates upon usage in your home directory
+- Logs and Autosave file can be found in the LNSVI Tool Utilities Directory the application creates upon usage in your "~" directory (home directory)
 
 ## Exported Results
 
