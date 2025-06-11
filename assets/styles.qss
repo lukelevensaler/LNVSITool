@@ -42,21 +42,20 @@ QLabel#welcomeLabel {
     max-height: 220px;
     margin-top: 8px;
     margin-bottom: 36px;
-    spacing: 0.04em;
 }
 QLabel#welcomeLabel .main-title {
     font-family: 'Montserrat', 'Arial Black', Arial, sans-serif;
     font-size: 28pt;
     font-weight: 900;
     color: #ffffff;
-    spacing: 0.05em;
+    spacing: 1em;
 }
 QLabel#welcomeLabel .subtitle {
     font-family: 'Fira Sans', 'Segoe UI', 'Verdana', Arial, sans-serif;
     font-size: 14pt;
     font-weight: 400;
     color: #e0e0e0;
-    spacing: 0.02em;
+    spacing: 0.5em;
 }
 QLabel#subWelcomeLabel {
     font-family: 'Fira Sans', 'Segoe UI', 'Verdana', Arial, sans-serif;
@@ -77,7 +76,7 @@ QLabel#subWelcomeLabel {
 /* --- TABLE --- */
 QTableWidget#resultsTable {
     background: #fff;
-    border: 3px solid #000;
+    border: 1px solid #000;
     padding: 10px;
     gridline-color: #444;
     margin-left: auto;
@@ -93,10 +92,12 @@ QTableWidget#resultsTable QHeaderView::section {
 QTableWidget#resultsTable QTableCornerButton::section {
     background: #f0f0f0;
     border: 1px solid #444;
+    padding: 6px 4px;
 }
 QTableWidget#resultsTable QTableView::item {
     background: #fff;
     border: 1px solid #bbb;
+    padding: 6px 4px;
 }
 
 /* BUTTONS */
@@ -113,9 +114,10 @@ QPushButton#finishButton {
     border-radius: 16px;
     font-family: 'Inter', 'Segoe UI', 'Verdana', 'Arial', 'Helvetica Neue', Arial, sans-serif;
     margin-bottom: 16px;
-    font-size: 16px;
+    font-size: 13px;
     font-weight: bold;
     spacing: 0.03em;
+    padding: 8px 24px;
 }
 
 QPushButton#discardButton {
@@ -142,12 +144,10 @@ QPushButton#downloadUILaunchButton{
 QPushButton#exportPDFButton,
 QPushButton#exportCSVButton,
 QPushButton#exportXLSXButton {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1976d2, stop:1 #0a78d2);
+    background: #1976d2;
     border: 2px solid #052146;
     color: #fff;
-    border-radius: 18px;
     spacing: 0.03em;
-    
 }
 QPushButton#exportPDFButton:hover,
 QPushButton#exportCSVButton:hover,
@@ -237,6 +237,18 @@ QWidget#progressWidget {
     border: none;
     border-radius: 0;
     padding: 0;
+}
+
+QLabel#progressLabel {
+    font-family: 'Fira Sans', 'Segoe UI', 'Verdana', 'Arial', sans-serif;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+    color: #052651;
+    padding: 8px 16px;
+    background: transparent;
+    border: transparent;
+    margin-bottom: 16px;
 }
 
 /* MESSAGE BOXES */

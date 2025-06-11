@@ -283,12 +283,9 @@ class UI(QMainWindow):
         self.progress_layout.setContentsMargins(0, 0, 0, 0) # No margins for the progress bar
         self.progress_layout.setSpacing(0)
 
-        # Add a label for the progress bar (top 1/2 of progress layout)
         # Ensure analysis_progress_bar is created before set_splash_text is called
         self.progress_label = QLabel(self.splash_text)
-        self.progress_label.setObjectName("progressLabel")
 
-        # Font via QSS only
         self.progress_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom)
         self.progress_label.setFixedHeight(40)
         self.progress_layout.addWidget(self.progress_label, alignment=Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom)
@@ -298,7 +295,6 @@ class UI(QMainWindow):
         self.analysis_progress_bar.setValue(0)
         self.analysis_progress_bar.setFixedHeight(55)
         self.analysis_progress_bar.setFixedWidth(300)
-        # Style via QSS only
 
         # Set progress_bar reference for compatibility
         self.progress_bar = self.analysis_progress_bar
