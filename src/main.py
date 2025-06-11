@@ -1,6 +1,6 @@
 """ 
 
-Main entry point for LNVSI Tool's GUI.
+Main entry point for LNVSI Tool and frontend GUI.
 
 """
 
@@ -23,7 +23,7 @@ from config import (
     LOG_FILE, resource_path
 )
 from analysis import AnalysisEngine
-from utils import ExportFindings
+from utils import ExportFindings, ErrorManager
 from loop_manger import ReturnHome
 
 # Connect to the global logging file
@@ -617,6 +617,7 @@ class UI(QMainWindow):
                         pass
                 self.restore_cursor()  # Restore cursor before returning home
                 self.rh.return_home_from_cancel()
+                ErrorManager.SetErrorsPaused(True)  # Pause error manager on cancel
             else:
                 # User aborted, just close the dialog and do nothing
                 return
@@ -783,8 +784,8 @@ class UI(QMainWindow):
 
     def force_wait_cursor(self):
         if not self._analysis_cursor_forced:
-            # Use the native system wait/busy cursor
-            QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
+            # Use the native system wait/spinning wheel cursor (platform-appropriate)
+            QApplication.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
             self._analysis_cursor_forced = True
 
     def restore_cursor(self):

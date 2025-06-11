@@ -1,3 +1,8 @@
+"""
+Manages returning/resetting to the home screen 
+from various states in the application's loops.
+"""
+
 # Basic Imports
 import logging
 from typing import TYPE_CHECKING
@@ -9,6 +14,7 @@ from PyQt6.QtWidgets import (
 
 # Core Imports
 from config import LOG_FILE
+from utils import ErrorManager
 
 if TYPE_CHECKING:
     from main import UI
@@ -23,12 +29,14 @@ logging.basicConfig(
 )
 
 class ReturnHome:
+
     def __init__(self, ui: object = None):
         self.ui = ui  # UI is an instance of the UI (QMainWindow) class
     
-
     def _full_reset(self):
-        # Remove all widgets and layouts from the main window, clear cached results, and re-render UI
+
+        # Turn errors back on
+        ErrorManager.SetErrorsPaused(False)
 
         # Remove all widgets from main_layout
         if hasattr(self.ui, 'main_layout'):

@@ -1,3 +1,7 @@
+"""
+The actual backend analysis algorithm
+"""
+
 # Basic Imports
 import logging
 import time
@@ -32,7 +36,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QTimer, QElapsedTimer
 
 # Core Imports
-from utils import FDRUtils
+from utils import FDRUtils, ErrorManager # error pausing checks for every error-related QMessageBox instance in this file specifically
 from loop_manger import ReturnHome
 from config import (
     qfiledialog__pinned_locations,
@@ -149,7 +153,8 @@ class AnalysisEngine:
 
         except Exception as e:
             logging.error(f"Error uploading CSV file: {e}")
-            QMessageBox.critical(self.ui, "Error", f"Error uploading CSV file: {e}")
+            if not ErrorManager.errors_suppressed:
+                QMessageBox.critical(self.ui, "Error", f"Error uploading CSV file: {e}")
             self.ui.restore_cursor()
             raise RuntimeError(f"Error uploading CSV file: {e}")
 
@@ -227,7 +232,6 @@ class AnalysisEngine:
             logging.info("analyze_all_samples completed. Results returned.")
         except Exception as e:
             logging.error(f"Error in read_csv: {e}")
-            QMessageBox.critical(self.ui, "Error Reading CSV", f"An error occurred while reading your CSV file. Please check the format and try again.\n\nError: {e}")
             self.ui.restore_cursor()
             self.rh.return_home_from_error()
             return
@@ -264,7 +268,8 @@ class AnalysisEngine:
             return processed
         except Exception as e:
             logging.error(f"Error in preprocess_all_curves: {e}")
-            QMessageBox.critical(self.ui, "Error Preprocessing Data", f"An error occurred while preprocessing your data.\n\nError: {e}")
+            if not ErrorManager.errors_suppressed: 
+                QMessageBox.critical(self.ui, "Error Preprocessing Data", f"An error occurred while preprocessing your data.\n\nError: {e}")
             self.ui.restore_cursor()
             self.rh.return_home_from_error()
             return {}
@@ -317,7 +322,8 @@ class AnalysisEngine:
             result = gp_minimize(sg_error, search_space, n_calls=20, random_state=0)
             if time.time() - opt_start > 30:
                 logging.warning("Savitzky-Golay optimization is taking unusually long (possible infinite loop).")
-                QMessageBox.warning(self.ui, "Warning", "Smoothing is taking unusually long. Please check your data or restart the app.")
+                if not ErrorManager.errors_suppressed:
+                    QMessageBox.warning(self.ui, "Warning", "Smoothing is taking unusually long. Please check your data or restart the app.")
             win_opt = int(result.x[0])
             if win_opt % 2 == 0:
                 win_opt += 1
@@ -334,7 +340,8 @@ class AnalysisEngine:
         except Exception as e:
             self.ui.remove_countdown_gif_and_timer()
             logging.error(f"Error in smooth_curve: {e}")
-            QMessageBox.critical(self.ui, "Error Smoothing Curve", f"An error occurred while smoothing the spectrum.\n\nError: {e}")
+            if not ErrorManager.errors_suppressed:   
+                QMessageBox.critical(self.ui, "Error Smoothing Curve", f"An error occurred while smoothing the spectrum.\n\nError: {e}")
             self.ui.restore_cursor()
             self.rh.return_home_from_error()
             return x, y
@@ -350,7 +357,8 @@ class AnalysisEngine:
             
             if time.time() - align_start > 30:
                 logging.warning("DTW alignment is taking unusually long (possible infinite loop).")
-                QMessageBox.warning(self.ui, "Warning", "Curve alignment is taking unusually long. Please check your data or restart the app.")
+                if not ErrorManager.errors_suppressed:
+                    QMessageBox.warning(self.ui, "Warning", "Curve alignment is taking unusually long. Please check your data or restart the app.")
             logging.info(f"DTW alignment complete. Distance: {distance}")
             aligned = np.interp(np.arange(len(ref)), [p[1] for p in path], [query[p[1]] for p in path])
             
@@ -367,7 +375,8 @@ class AnalysisEngine:
         except Exception as e:
             self.ui.remove_countdown_gif_and_timer()
             logging.error(f"Error in align_curves_dtw: {e}")
-            QMessageBox.critical(self.ui, "Error Aligning Curves", f"An error occurred while aligning curves using DTW.\n\nError: {e}")
+            if not ErrorManager.errors_suppressed:  
+                QMessageBox.critical(self.ui, "Error Aligning Curves", f"An error occurred while aligning curves using DTW.\n\nError: {e}")
             self.ui.restore_cursor()
             self.rh.return_home_from_error()
             return query
@@ -414,7 +423,8 @@ class AnalysisEngine:
                 logging.info(f"lmfit Voigt fit succeeded. Fit report: {result.fit_report()}")
             except ImportError as e:
                 logging.error("lmfit is not installed. Please install lmfit for robust Voigt fitting.")
-                QMessageBox.warning(self.ui, "lmfit Not Installed", "The lmfit package is required for robust Voigt fitting. Falling back to scipy curve_fit.")
+                if not ErrorManager.errors_suppressed:
+                    QMessageBox.warning(self.ui, "lmfit Not Installed", "The lmfit package is required for robust Voigt fitting. Falling back to scipy curve_fit.")
                 fit_success = False
                 fit = None
             except Exception as fit_err:
@@ -449,7 +459,8 @@ class AnalysisEngine:
             if hasattr(self.ui, 'progress_label'):
                 self.ui.progress_label.setText("Voigt fit failed, using original data...")
                 QApplication.processEvents()
-            QMessageBox.warning(self.ui, "Voigt Fit Warning", f"Voigt profile fitting failed. The original data will be used for this region.\n\nError: {e}")
+            if not ErrorManager.errors_suppressed:
+                QMessageBox.warning(self.ui, "Voigt Fit Warning", f"Voigt profile fitting failed. The original data will be used for this region.\n\nError: {e}")
             self.ui.close_all_message_boxes()
             self.ui.restore_cursor()
             self.rh.return_home_from_error()
@@ -546,7 +557,8 @@ class AnalysisEngine:
         except Exception as e:
             self.ui.remove_countdown_gif_and_timer()
             logging.error(f"Error in compute_similarity_metrics: {e}")
-            QMessageBox.critical(self.ui, "Error Computing Similarity", f"An error occurred while computing similarity metrics.\n\nError: {e}")
+            if not ErrorManager.errors_suppressed:
+                QMessageBox.critical(self.ui, "Error Computing Similarity", f"An error occurred while computing similarity metrics.\n\nError: {e}")
             self.ui.restore_cursor()
             self.rh.return_home_from_error()
             return {"similarity_percent": 0, "p_value": 1.0, "conotoxin_like": False}
@@ -658,7 +670,8 @@ class AnalysisEngine:
             return results
         except Exception as e:
             logging.error(f"Error in analyze_all_samples: {e}")
-            QMessageBox.critical(self.ui, "Error Analyzing Samples", f"An error occurred while analyzing samples.\n\nError: {e}")
+            if not ErrorManager.errors_suppressed:
+                QMessageBox.critical(self.ui, "Error Analyzing Samples", f"An error occurred while analyzing samples.\n\nError: {e}")
             self.ui.restore_cursor()
             self.rh.return_home_from_error()
             return {}

@@ -236,3 +236,22 @@ class ExportFindings:
         except Exception as e:
             logging.error(f"Error exporting results: {e}")
             QMessageBox.critical(self.ui, "Export Error", f"An error occurred during export.\n\nError: {e}")
+
+class ErrorManager:
+    """
+    Utility to suppress logging and QMessageBox errors.
+    Usage:
+        ErrorManager.SetErrorsPaused(True)  # Suppress
+        ErrorManager.SetErrorsPaused(False) # Unsuppress
+    """
+    errors_suppressed = False
+
+    @staticmethod
+    def SetErrorsPaused(suppress: bool):
+        ErrorManager.errors_suppressed = suppress
+        if suppress:
+            logging.getLogger().setLevel(logging.CRITICAL)
+        else:
+            logging.getLogger().setLevel(logging.DEBUG)
+       
+        

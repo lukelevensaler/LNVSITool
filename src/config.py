@@ -1,3 +1,7 @@
+""" 
+Essential configuration logic for the whole application.
+"""
+
 # Import necessary modules
 import os
 import logging
