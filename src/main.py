@@ -43,7 +43,7 @@ class UI(QMainWindow):
         self.setGeometry(100, 100, 800, 600)
         self.setMinimumSize(1000, 800)
        
-        self.icon_path = resource_path("icon.icns")
+        self.icon_path = resource_path("icon.png")
         self.background_path = resource_path("background.png")
         self.gif_path = resource_path("countdown.gif")
         
