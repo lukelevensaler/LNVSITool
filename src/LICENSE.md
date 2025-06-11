@@ -2,7 +2,7 @@
 
 ## Software created by Luke Levensaler, 2025
 
-# * **Important Information (written by Luke J. Levensaler on 6/11/2025):**
+# **Important Information (written by Luke J. Levensaler on 6/11/2025):**
 
 - The Software is a part of the ConoWare Project's software suite
 
@@ -21,7 +21,7 @@
 - This software is high throughput and can run on most modern computers and all mainstream operating systems. Not supported operating systems include RedHat, Fedora, Gentoo, Solaris, FreeBSD, or ChromeOS. Fully supported operating systems include Windows, MacOS, and all Debian-based Linux systems However, if you are an eligible open-source user, the Software may be compiled from source and deployed in any operating system you wish.
 
 
-# * **Usage:**
+# **Usage:**
     
 - The software is intended for initial analysis of your 350-1020 nm spectral data obtained from the novel Levensaler Immobilized Metal Chelate Affinity Assay (LIMCALA), also called the Levensaler Assay (LA) or IMCAL-LA. LIMCALA is Luke Levensaler's intellectual property and must be integarted into any research paper it is used in alongside proper citation of his work.
 
@@ -33,6 +33,6 @@
 
 - You agree that the prohibitions on abusive usage of the Software or any other ConoWare software apply to all of your applicable associates. For example, you agree that if you abuse the Software or any other ConoWare software and you work on a research vessel, the entire vessel will lose access to the Software and any other ConoWare software.
 
-# * **Luke's ORCID ID:** 
+# **Luke's ORCID ID:** 
     0009-0008-5903-7488
 
