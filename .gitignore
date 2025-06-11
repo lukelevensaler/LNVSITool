@@ -1,11 +1,6 @@
 # Python
 __pycache__/
-*.py[cod]
-*.so
-*.egg
-*.egg-info/
-dist/
-build/
+*.py[cod] 
 venv/
 
 # macOS
@@ -13,16 +8,13 @@ venv/
 **/.DS_Store
 
 # Jupyter
-.ipynb_checkpoints/
+.ipynb_checkpoints/ 
 
 # VSCode
 .vscode/
 
-# PyInstaller
+# PyInstaller (compilation)
 *.spec
-
-# General
-*.log
-*.tmp
-*.bak
+dist/
+build/
 
