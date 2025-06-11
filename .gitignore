@@ -25,5 +25,3 @@ venv/
 *.tmp
 *.bak
 
-# Ignore all in venv
-venv/
