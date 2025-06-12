@@ -41,19 +41,20 @@ QLabel#welcomeLabel {
     min-height: 120px;
     max-height: 220px;
     margin-top: 8px;
-    margin-bottom: 36px;
+    margin-bottom: 12px;
 }
 QLabel#welcomeLabel .main-title {
     font-family: 'Montserrat', 'Arial Black', Arial, sans-serif;
-    font-size: 28pt;
-    font-weight: 900;
+    font-size: 28px;
+    font-weight: bold;
     color: #ffffff;
     spacing: 1em;
 }
 QLabel#welcomeLabel .subtitle {
     font-family: 'Fira Sans', 'Segoe UI', 'Verdana', Arial, sans-serif;
-    font-size: 14pt;
+    font-size: 14px;
     font-weight: 400;
+    font-style: italic;
     color: #e0e0e0;
     spacing: 0.5em;
 }
@@ -117,7 +118,7 @@ QPushButton#finishButton {
     font-size: 13px;
     font-weight: bold;
     spacing: 0.03em;
-    padding: 8px 24px;
+    padding: 16px 24px;
 }
 
 QPushButton#discardButton {

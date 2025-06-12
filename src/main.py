@@ -125,11 +125,15 @@ class UI(QMainWindow):
         self.welcome_container.setLayout(self.welcome_layout)
 
         # Main welcome label (HTML Rich Text))(top-aligned, wide)
-        self.welcome_label = QLabel(
-            '<span class="main-title">Welcome to the LNVSI Tool (Beta)!</span><br>'
-            '<span class="subtitle">Created by Luke Levensaler, 2025</span>'
-        )
-        self.welcome_label.setObjectName("welcomeLabel")
+        welcome_html_path = resource_path("welcome.html")
+        welcome_html_path = None
+        if os.path.exists(welcome_html_path):
+            try:
+                with open(welcome_html_path, "r", encoding="utf-8") as f:
+                    welcome_html = f.read()
+            except Exception as e:
+                logging.error(f"Failed to load welcome.html: {e}")
+        self.welcome_label = QLabel(welcome_html)
         self.welcome_label.setTextFormat(Qt.TextFormat.RichText)
         self.welcome_label.setMinimumWidth(700)
         self.welcome_label.setMaximumWidth(1200)
@@ -141,19 +145,17 @@ class UI(QMainWindow):
             self.welcome_label,
             alignment=Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop
         )
-        self.welcome_layout.addSpacing(8)
 
         # Sub welcome label (spaced below welcome label, above upload button)
-        self.sub_welcome_label = QLabel(
-            "Let's analyze your Levensaler Assay-derived venomic datasets with the "
-            "Levensaler Neogastropod Venomic Similarity Index's (LNVSI) machine learning-powered "
-            "statistical algorithm! The results will tell you if they share similarities to your "
-            "conotoxin positive control.\n"
-            "If your device can handle it (see the ConoWare Project's website or our GitHub page) "
-            "and your peptidomes are conopeptide-like, "
-            "you should install ConoBot AI to help you identify your proteomes' unique "
-            "primary structure cysteine frameworks!"
-        )
+        subwelcome_html_path = resource_path("subwelcome.html")
+        subwelcome_html = None
+        if os.path.exists(subwelcome_html_path):
+            try:
+                with open(subwelcome_html_path, "r", encoding="utf-8") as f:
+                    subwelcome_html = f.read()
+            except Exception as e:
+                logging.error(f"Failed to load welcome.html: {e}")
+        self.sub_welcome_label = QLabel(subwelcome_html)
         self.sub_welcome_label.setObjectName("subWelcomeLabel")
         self.sub_welcome_label.setMinimumWidth(400)
         self.sub_welcome_label.setMaximumWidth(900)
@@ -249,6 +251,7 @@ class UI(QMainWindow):
 
         # Add a top label with breathing room and centered text
         self.data_analysis_label = QLabel("Running Similarity Engine...")
+        
         # Font via QSS only
         self.data_analysis_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
         self.data_analysis_label.setContentsMargins(0, 30, 0, 20)  # Top and bottom breathing room
@@ -800,6 +803,24 @@ def main():
         with open(qss_path, "r") as f:
             styles = f.read()
         app.setStyleSheet(styles)  # Apply globally to all widgets
+
+    # Play soundtrack.mp3 on loop
+    from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+    from PyQt6.QtCore import QUrl
+
+    soundtrack_path = resource_path("soundtrack.mp3")
+    if os.path.exists(soundtrack_path):
+        audio_output = QAudioOutput()
+        player = QMediaPlayer()
+        player.setAudioOutput(audio_output)
+        player.setSource(QUrl.fromLocalFile(soundtrack_path))
+        player.setLoops(QMediaPlayer.Loops.Infinite)
+        player.play()
+        
+        # Keep references alive
+        app._audio_output = audio_output
+        app._player = player
+
     window = UI()
     window.render_ui()
     window.show()
