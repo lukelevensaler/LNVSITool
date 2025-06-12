@@ -14,6 +14,10 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
 - Cross-platform (macOS, Linux, Windows; see build notes)
 
 
+## Installation the Normal Way
+
+- Go to https://conowareproject.org/software/LNSVI to download the installer package for your operating system
+
 ## Installation From Source
 
 1. **Clone the repository:**
