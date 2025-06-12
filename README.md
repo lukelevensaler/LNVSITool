@@ -5,7 +5,7 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
 ## Features
 
 - Modern, user-friendly GUI (PyQt6)
-- Robust CSV import and autosave
+- Robust CSV import and JSON-based autosave
 - Region-segmented spectral deconvolution (Voigt fitting, Gaussian fallback)
 - Machine learning-powered similarity metrics
 - FDR-corrected statistical testing
