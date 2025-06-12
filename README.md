@@ -34,16 +34,26 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
    ```
 
 4. **Compile with PyInstaller:**
-    ```sh
-    pyinstaller --windowed --name "LNVSI Tool" --icon=assets/icon.icns --add-data "assets:assets" src/main.py
-    ```
+    
     MacOS: 
 
+    - Run (with a :)
+
+    ```sh
+    pyinstaller --windowed --name "LNVSI Tool" --icon=assets/icon.png --add-data "assets:assets" src/main.py
+    ```  
     - The compiled `.app` bundle will be in the `dist/` directory..
     
     Windows:
 
+    - Run (with a ;)
+
+    ```sh
+    pyinstaller --windowed --name "LNVSI Tool" --icon=assets/icon.png --add-data "assets;assets" src/main.py
+    ```  
+
     - The compiled `.exe` file will be located in the `dist\` directory.
+
     - If you see a security warning, click "More info" and "Run anyway".
 
     Linux:
@@ -63,7 +73,14 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
         ```sh
         chmod +x LNVSI-Tool.desktop
         ```
-    - The compiled executable will be in the `dist/` directory after running PyInstaller.
+
+    - Run (with a ;)
+
+       ```sh
+       pyinstaller --windowed --name "LNVSI Tool" --icon=assets/icon.png --add-data "assets;assets" src/main.py
+       ```  
+
+    - The compiled executable will be in the `dist/` directory
 
     - It too must be made executable:
         ```sh

@@ -126,7 +126,6 @@ class UI(QMainWindow):
 
         # Main welcome label (HTML Rich Text))(top-aligned, wide)
         welcome_html_path = resource_path("welcome.html")
-        welcome_html_path = None
         if os.path.exists(welcome_html_path):
             try:
                 with open(welcome_html_path, "r", encoding="utf-8") as f:
@@ -148,7 +147,6 @@ class UI(QMainWindow):
 
         # Sub welcome label (spaced below welcome label, above upload button)
         subwelcome_html_path = resource_path("subwelcome.html")
-        subwelcome_html = None
         if os.path.exists(subwelcome_html_path):
             try:
                 with open(subwelcome_html_path, "r", encoding="utf-8") as f:
@@ -159,7 +157,7 @@ class UI(QMainWindow):
         self.sub_welcome_label.setObjectName("subWelcomeLabel")
         self.sub_welcome_label.setMinimumWidth(400)
         self.sub_welcome_label.setMaximumWidth(900)
-        self.sub_welcome_label.setMinimumHeight(300)
+        self.sub_welcome_label.setMinimumHeight(350)
         self.sub_welcome_label.setMaximumHeight(500)
         self.sub_welcome_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
         self.sub_welcome_label.setWordWrap(True)
@@ -794,33 +792,17 @@ class UI(QMainWindow):
 
 def main():
     import sys
+    from config import resource_path
+
     app = QApplication(sys.argv)
 
     # Load and globally apply styles.qss to ALL UI everywhere
-    from config import resource_path
     qss_path = resource_path("styles.qss")
     if os.path.exists(qss_path):
         with open(qss_path, "r") as f:
             styles = f.read()
         app.setStyleSheet(styles)  # Apply globally to all widgets
-
-    # Play soundtrack.mp3 on loop
-    from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
-    from PyQt6.QtCore import QUrl
-
-    soundtrack_path = resource_path("soundtrack.mp3")
-    if os.path.exists(soundtrack_path):
-        audio_output = QAudioOutput()
-        player = QMediaPlayer()
-        player.setAudioOutput(audio_output)
-        player.setSource(QUrl.fromLocalFile(soundtrack_path))
-        player.setLoops(QMediaPlayer.Loops.Infinite)
-        player.play()
         
-        # Keep references alive
-        app._audio_output = audio_output
-        app._player = player
-
     window = UI()
     window.render_ui()
     window.show()
