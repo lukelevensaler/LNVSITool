@@ -27,9 +27,19 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
    ```
 
 2. **Create and activate a virtual environment:**
+   
+   MacOS/Linux:
+
    ```sh
    python3 -m venv venv
-   source venv/bin/activate  # or 'venv\Scripts\activate' on Windows
+   source venv/bin/activate
+   ```
+
+   Windows:
+
+   ```sh
+   python3 -m venv venv
+   venv\Scripts\activate
    ```
 
 3. **Install dependencies:**
@@ -118,7 +128,7 @@ python src/main.py
 
 ## File Structure
 - `src/` — Main application code
-- `assets/` — Icons, images, stylesheets
+- `assets/` — Images, stylesheets
 - `info/` — License/EULA
 - `requirements.txt` — Python dependencies
 
