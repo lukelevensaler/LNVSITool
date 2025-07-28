@@ -682,9 +682,9 @@ class AnalysisEngine:
         Returns a dict: {'NUV': (x_nuv, y_nuv), ...}
         """
         regions = {
-            'NUV': (200, 400),
+            'NUV': (350, 400),
             'VIS': (400, 700),
-            'NIR': (700, 1000)
+            'NIR': (700, 1020)
         }
         segmented = {}
         for region, (lower, upper) in regions.items():

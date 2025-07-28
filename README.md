@@ -1,3 +1,4 @@
+
 # LNVSI Tool (Levensaler Neogastropod Venomic Similarity Index Tool)
 
 A PyQt6-based GUI application for venomic data analysis, spectral deconvolution, and statistical similarity indexing of neogastropod peptidomes.
@@ -13,21 +14,21 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
 - Detailed logging and error handling
 - Cross-platform (macOS, Linux, Windows; see build notes)
 
-
 ## Installation the Normal Way
 
-- Go to https://conowareproject.org/software/LNSVI to download the installer package for your operating system
+- Go to [https://conowareproject.org/software/LNSVI](https://conowareproject.org/software/LNSVI) to download the installer package for your operating system
 
 ## Installation From Source
 
 1. **Clone the repository:**
+
    ```sh
    git clone https://github.com/lukelevensaler/LNVSITool.git
    cd LNVSITool
    ```
 
 2. **Create and activate a virtual environment:**
-   
+
    MacOS/Linux:
 
    ```sh
@@ -43,28 +44,30 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
    ```
 
 3. **Install dependencies:**
+
    ```sh
    pip install -r src/requirements.txt
    ```
 
 4. **Compile with PyInstaller:**
-    
-    MacOS: 
+
+    MacOS:
 
     - Run (with a :)
 
     ```sh
     pyinstaller --windowed --name "LNVSI Tool" --icon=assets/icon.png --add-data "assets:assets" src/main.py
-    ```  
-    - The compiled `.app` bundle will be in the `dist/` directory..
-    
+    ```
+
+    - The compiled `.app` bundle will be in the `dist/` directory.
+
     Windows:
 
     - Run (with a ;)
 
     ```sh
     pyinstaller --windowed --name "LNVSI Tool" --icon=assets/icon.png --add-data "assets;assets" src/main.py
-    ```  
+    ```
 
     - The compiled `.exe` file will be located in the `dist\` directory.
 
@@ -73,6 +76,7 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
     Linux:
 
     - You will have to first create the `.desktop` launcher in the project root:
+
         ```ini
         [Desktop Entry]
         Name=LNVSI Tool
@@ -81,9 +85,11 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
         Type=Application
         Categories=Science;Utility;
         ```
+
         Replace `/path/to/LNVSITool/` with the actual path to your project directory.
 
     - Then Make the `.desktop` file executable:
+
         ```sh
         chmod +x LNVSI-Tool.desktop
         ```
@@ -92,41 +98,46 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
 
        ```sh
        pyinstaller --windowed --name "LNVSI Tool" --icon=assets/icon.png --add-data "assets;assets" src/main.py
-       ```  
+       ```
 
     - The compiled executable will be in the `dist/` directory
 
     - It too must be made executable:
+
         ```sh
         chmod +x LNVSI-Tool.desktop
         ```
 
-    
 ## Usage Without Compilation
 
 1. Clone the repository:
+
    ```sh
    git clone https://github.com/lukelevensaler/LNVSITool.git
    cd LNVSITool
    ```
 
 2. Create and activate a virtual environment:
+
    ```sh
    python3 -m venv venv
    source venv/bin/activate  # or 'venv\Scripts\activate' on Windows
    ```
 
 3. Install dependencies:
+
    ```sh
    pip install -r src/requirements.txt
    ```
 
-4. Run directly from source :
-```sh
-python src/main.py
-```
+4. Run directly from source:
+
+   ```sh
+   python src/main.py
+   ```
 
 ## File Structure
+
 - `src/` — Main application code
 - `assets/` — Images, stylesheets
 - `info/` — License/EULA
@@ -141,10 +152,13 @@ python src/main.py
 - All exports (CSV, PDF, XLSX) are saved to your Downloads directory by default.
 
 ## Full Documentation
-- https://docs.conowareproject.org
+
+- [https://docs.conowareproject.org](https://docs.conowareproject.org)
 
 ## License
+
 See [info/LICENSE.md](info/LICENSE.md)
 
 ---
+
 Created by Luke Levensaler, 2025
