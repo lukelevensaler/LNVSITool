@@ -91,7 +91,7 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
     - Then Make the `.desktop` file executable:
 
         ```sh
-        chmod +x LNVSI-Tool.desktop
+        sudo chmod +x LNVSI-Tool.desktop
         ```
 
     - Run (with a ;)
@@ -105,7 +105,7 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
     - It too must be made executable:
 
         ```sh
-        chmod +x LNVSI-Tool.desktop
+        sudo chmod +x LNVSI-Tool.desktop
         ```
 
 ## Usage Without Compilation
