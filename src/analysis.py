@@ -584,16 +584,16 @@ class AnalysisEngine:
                 raise ValueError(f"Positive control '{ctrl_name}' not found in processed data.")
             x_ctrl, y_ctrl = self.processed[ctrl_name]
             regions_ctrl = self.segment_regions(x_ctrl, y_ctrl)
-            if not all(k in regions_ctrl for k in ['NUV', 'VIS', 'NIR']):
+            if not all(k in regions_ctrl for k in ['UVA', 'VIS', 'NIR']):
                 raise ValueError("One or more spectral regions are missing in the positive control.")
             logging.info("Segmented positive control regions.")
-            y_nuv_dec = self.deconvolve_voigt(*regions_ctrl['NUV'])
-            logging.info("Deconvolved NUV region for control.")
+            y_uva_dec = self.deconvolve_voigt(*regions_ctrl['UVA'])
+            logging.info("Deconvolved UVA region for control.")
             y_nir_dec = self.deconvolve_voigt(*regions_ctrl['NIR'])
             logging.info("Deconvolved NIR region for control.")
             _, y_vis = regions_ctrl['VIS']
-            y_ctrl_full = np.concatenate([y_nuv_dec, y_vis, y_nir_dec])
-            logging.info("Constructed full control curve.");
+            y_ctrl_full = np.concatenate([y_uva_dec, y_vis, y_nir_dec])
+            logging.info("Constructed full control curve.")
             if hasattr(self.ui, 'progress_bar'):
                 self.ui.progress_bar.setValue(60)
                 self.ui.set_splash_text()
@@ -608,18 +608,18 @@ class AnalysisEngine:
                     raise ValueError(f"Sample '{name}' not found in processed data.")
                 x_sample, y_sample = self.processed[name]
                 regions_sample = self.segment_regions(x_sample, y_sample)
-                if not all(k in regions_sample for k in ['NUV', 'VIS', 'NIR']):
+                if not all(k in regions_sample for k in ['UVA', 'VIS', 'NIR']):
                     raise ValueError(f"One or more spectral regions are missing in sample '{name}'.")
                 logging.info(f"Segmented regions for {name}")
                 QApplication.processEvents()
-                y_nuv_sample = self.deconvolve_voigt(*regions_sample['NUV'])
-                logging.info(f"Deconvolved NUV for {name}")
+                y_uva_sample = self.deconvolve_voigt(*regions_sample['UVA'])
+                logging.info(f"Deconvolved UVA for {name}")
                 QApplication.processEvents()
                 y_nir_sample = self.deconvolve_voigt(*regions_sample['NIR'])
                 logging.info(f"Deconvolved NIR for {name}")
                 QApplication.processEvents()
                 _, y_vis_sample = regions_sample['VIS']
-                y_sample_full = np.concatenate([y_nuv_sample, y_vis_sample, y_nir_sample])
+                y_sample_full = np.concatenate([y_uva_sample, y_vis_sample, y_nir_sample])
                 metrics = self.compute_similarity_metrics(y_ctrl_full, y_sample_full)
                 logging.info(f"Computed similarity metrics for {name}")
                 metrics_list.append(metrics)
@@ -688,13 +688,13 @@ class AnalysisEngine:
 
     def segment_regions(self, x, y):
         """
-        Segments the spectrum into NUV, VIS, and NIR regions.
-        Returns a dict: {'NUV': (x_nuv, y_nuv), ...}
+        Segments the spectrum into UVA, VIS, and NIR regions.
+        Returns a dict: {'UVA': (x_uva, y_uva), ...}
         """
         regions = {
-            'NUV': (350, 400),
-            'VIS': (400, 700),
-            'NIR': (700, 1020)
+            'UVA': (350, 400),
+            'VIS': (400, 760),
+            'NIR': (760, 1020)
         }
         segmented = {}
         for region, (lower, upper) in regions.items():
