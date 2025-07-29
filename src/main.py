@@ -492,31 +492,39 @@ class UI(QMainWindow):
 
         # Populate the table with results for each analyte (excluding positive control)
         if hasattr(self.ae, 'sample_names') and hasattr(self.ae, 'analyze_all_samples'):
+
             # Cache results in self for reuse
             if not hasattr(self, '_cached_results') or self._cached_results is None:
                 self._cached_results = self.ae.analyze_all_samples()
             results_dict = self._cached_results
+
             for row, sample in enumerate(self.ae.sample_names):
                 result = results_dict.get(sample, {})
+
                 # Ensure conotoxin_like is interpreted as boolean, not string or number
                 conotoxin_like = result.get("conotoxin_like", False)
+
                 if isinstance(conotoxin_like, str):
                     conotoxin_like = conotoxin_like.strip().lower() == "true"
                 conotoxin_like = bool(conotoxin_like)
-                # Fill table with correct values
+
+                # Fill table with correct values (ACTUAL VALUE DISPLAY LOGIC)
                 for col, value in enumerate([
                     str(sample),
-                    "Yes" if conotoxin_like else "No",
-                    f"{result.get('similarity_percent', 0):.2f}",
-                    f"{result.get('p_value', 1):.3g}"
+                    "Yes" if conotoxin_like else "No", # a bool from analysis.py concatenated as a str for display here in main.py for conotoxin_like
+                    f"{result.get('similarity_percent', 0):.4f}", # 4 decimal places no matter what for similarity_percent
+                    f"{result.get('p_value', 1):.6g}" # 6 significant figures for p_value
                 ]):
                     item = QTableWidgetItem(value)
                     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                     self.results_table.setItem(row, col, item)
+
             # Set default alignment for all cells (including empty ones)
             for row in range(self.results_table.rowCount()):
+
                 for col in range(self.results_table.columnCount()):
                     item = self.results_table.item(row, col)
+
                     if item is None:
                         item = QTableWidgetItem("")
                         item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
