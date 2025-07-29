@@ -18,7 +18,7 @@ from scipy.stats import pearsonr
 from scipy.special import wofz
 from skopt import gp_minimize
 from skopt.space import Integer
-from fastdtw import fastdtw
+from fastdtw import fastdtw # type: ignore
 import decimal
 import lmfit
 
@@ -159,10 +159,11 @@ class AnalysisEngine:
             raise RuntimeError(f"Error uploading CSV file: {e}")
 
     def read_csv(self):
-        
         try:
             logging.info("Starting read_csv method.")
             QApplication.processEvents()
+            if self.filename is None:
+                raise ValueError("No filename specified for CSV upload.")
             df = pd.read_csv(self.filename)
             logging.info("CSV file loaded into DataFrame.")
 
@@ -282,7 +283,7 @@ class AnalysisEngine:
             def lowpass_filter(y, cutoff_ratio=0.1):
                 logging.info("Applying lowpass filter.")
                 N = len(y)
-                yf = fft(y)
+                yf = np.array(fft(y))
                 cutoff = int(N * cutoff_ratio)
                 yf[cutoff:-cutoff] = 0
                 if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
@@ -291,7 +292,11 @@ class AnalysisEngine:
                     self.ui.set_splash_text()
                 QApplication.processEvents()
                 logging.info("Lowpass filter applied.")
-                return np.real(ifft(yf))
+                result = ifft(yf)
+                if isinstance(result, tuple):
+                    result = result[0]
+                arr = np.asarray(result)
+                return np.real(arr)
             cs = CubicSpline(x, y)
             logging.info("CubicSpline interpolation complete.")
             x_new = np.linspace(x.min(), x.max(), 1000)
@@ -324,11 +329,15 @@ class AnalysisEngine:
                 logging.warning("Savitzky-Golay optimization is taking unusually long (possible infinite loop).")
                 if not ErrorManager.errors_suppressed:
                     QMessageBox.warning(self.ui, "Warning", "Smoothing is taking unusually long. Please check your data or restart the app.")
-            win_opt = int(result.x[0])
-            if win_opt % 2 == 0:
-                win_opt += 1
-            poly_opt = int(result.x[1])
-            poly_opt = max(2, min(poly_opt, win_opt-1))
+            if result is not None and hasattr(result, 'x'):
+                win_opt = int(result.x[0])
+                if win_opt % 2 == 0:
+                    win_opt += 1
+                poly_opt = int(result.x[1])
+                poly_opt = max(2, min(poly_opt, win_opt-1))
+            else:
+                win_opt = 11
+                poly_opt = 2
             if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
                 self.ui.progress_bar.setValue(30)
             if hasattr(self.ui, 'set_splash_text'):
@@ -499,8 +508,9 @@ class AnalysisEngine:
                 pls_score = 0
                 logging.info("PLS score computation failed, set to 0.")
             
-            cos_sim = cosine_similarity([y_ctrl], [y_sample])[0, 0]
-            pearson_corr, _ = pearsonr(y_ctrl, y_sample)
+            cos_sim = cosine_similarity(np.array([y_ctrl]), np.array([y_sample]))[0, 0]
+            pc_tuple = pearsonr(y_ctrl, y_sample)
+            pearson_corr: float = pc_tuple[0]  # type: ignore
             euclid_dist = np.linalg.norm(y_ctrl - y_sample)
             
             if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
@@ -514,7 +524,7 @@ class AnalysisEngine:
             auc_diff = np.abs(np.trapezoid(y_ctrl) - np.trapezoid(y_sample)) / np.trapezoid(y_ctrl)
             sim_metrics = np.array([
                 cos_sim,
-                (pearson_corr + 1) / 2,
+                (float(pearson_corr) + 1) / 2,
                 1 / (1 + euclid_dist),
                 1 - auc_diff,
                 1 - pca_score,
@@ -705,8 +715,9 @@ class AnalysisEngine:
             permuted = rng.permutation(y_sample)
             
             try:
-                cos_sim = cosine_similarity([y_ctrl], [permuted])[0, 0]
-                pearson_corr, _ = pearsonr(y_ctrl, permuted)
+                cos_sim = cosine_similarity(np.array([y_ctrl]), np.array([permuted]))[0, 0]
+                pc_tuple = pearsonr(y_ctrl, permuted)
+                pearson_corr: float = pc_tuple[0]  # type: ignore
                 euclid_dist = np.linalg.norm(y_ctrl - permuted)
                 auc_diff = np.abs(np.trapezoid(y_ctrl) - np.trapezoid(permuted)) / np.trapezoid(y_ctrl)
                 pca = PCA(n_components=1)
@@ -724,7 +735,7 @@ class AnalysisEngine:
                     pls_score = 0
                 sim_metrics = np.array([
                     cos_sim,
-                    (pearson_corr + 1) / 2,
+                    (float(pearson_corr) + 1) / 2,
                     1 / (1 + euclid_dist),
                     1 - auc_diff,
                     1 - pca_score,

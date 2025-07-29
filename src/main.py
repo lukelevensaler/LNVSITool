@@ -464,16 +464,22 @@ class UI(QMainWindow):
         self.results_table.setColumnCount(4)
         self.results_table.setRowCount(self.ae.num_analytes)
         self.results_table.setHorizontalHeaderLabels(["Sample", "Conotoxin Like?", "Similarity %", "p-value"])
-        self.results_table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.results_table.verticalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        # Set resize mode for all columns to ResizeToContents for best fit
-        for col in range(4):
-            self.results_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
-        self.results_table.horizontalHeader().setStretchLastSection(True)
-        self.results_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        self.results_table.horizontalHeader().setSectionsMovable(False)
-        self.results_table.verticalHeader().setSectionsMovable(False)
+        hh = self.results_table.horizontalHeader()
+        vh = self.results_table.verticalHeader()
+        if hh is not None:
+            hh.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+            for col in range(4):
+                hh.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+            hh.setStretchLastSection(True)
+            hh.setSectionsMovable(False)
+            hh.setVisible(True)
+            hh.setSectionsClickable(False)
+        if vh is not None:
+            vh.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+            vh.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+            vh.setSectionsMovable(False)
+            vh.setVisible(True)
+            vh.setSectionsClickable(False)
         self.results_table.setHorizontalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
         self.results_table.setVerticalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
         self.results_table.setCornerButtonEnabled(False)
@@ -483,10 +489,6 @@ class UI(QMainWindow):
         self.results_table.setShowGrid(True)
         self.results_table.setWordWrap(True)
         self.results_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.results_table.horizontalHeader().setVisible(True)
-        self.results_table.verticalHeader().setVisible(True)
-        self.results_table.horizontalHeader().setSectionsClickable(False)
-        self.results_table.verticalHeader().setSectionsClickable(False)
 
         # Populate the table with results for each analyte (excluding positive control)
         if hasattr(self.ae, 'sample_names') and hasattr(self.ae, 'analyze_all_samples'):
@@ -571,7 +573,8 @@ class UI(QMainWindow):
                 return
         except Exception as e:
             logging.error(f"Error confirming download: {e}")
-            QMessageBox.critical(self.ui, "Error", f"Error confirming download: {e}")
+            # Fix: self.ui is not a known attribute of UI, use self instead
+            QMessageBox.critical(self, "Error", f"Error confirming download: {e}")
             raise RuntimeError(f"Error confirming download: {e}")
 
     def confirm_results_discard(self):
@@ -595,7 +598,8 @@ class UI(QMainWindow):
                 return
         except Exception as e:
             logging.error(f"Error confirming discard: {e}")
-            QMessageBox.critical(self.ui, "Error", f"Error confirming discard: {e}")
+            # Fix: self.ui is not a known attribute of UI, use self instead
+            QMessageBox.critical(self, "Error", f"Error confirming discard: {e}")
             raise RuntimeError(f"Error confirming discard: {e}")
 
     def confirm_analysis_cancellation(self):
@@ -677,18 +681,24 @@ class UI(QMainWindow):
             # Placement logic for upload/download/cancel/discard buttons
             valid_triggers = [getattr(self, 'upload_button', None), getattr(self, 'download_button', None), getattr(self, 'cancel_button', None), getattr(self, 'discard_button', None)]
             trigger_ok = False
-            if trigger_widget is not None and trigger_widget in valid_triggers:
-                try:
-                    trigger_ok = trigger_widget.isWidgetType() and trigger_widget.isVisible()
-                except Exception:
+            try:
+                if trigger_widget is not None and trigger_widget in valid_triggers:
+                # trigger_widget may be None, so we check before calling methods
                     trigger_ok = False
+                if trigger_widget is not None:
+                    if hasattr(trigger_widget, "isWidgetType") and hasattr(trigger_widget, "isVisible"):
+                        trigger_ok = trigger_widget.isWidgetType() and trigger_widget.isVisible()
+            except Exception:
+                trigger_ok = False
             parent_layout_ok = False
             if parent_layout is not None and hasattr(parent_layout, 'indexOf') and trigger_ok:
                 try:
                     index = parent_layout.indexOf(trigger_widget)
                     if index != -1:
                         parent_layout.insertWidget(index, group_widget, alignment=Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-                        trigger_widget.setContentsMargins(0, 0, 0, group_margin_bottom)
+                        # trigger_widget may be None or not have setContentsMargins
+                        if trigger_widget is not None and hasattr(trigger_widget, "setContentsMargins"):
+                            trigger_widget.setContentsMargins(0, 0, 0, group_margin_bottom)
                         group_widget.setContentsMargins(0, 0, 0, group_margin_bottom)
                     else:
                         parent_layout.addWidget(group_widget, alignment=Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
@@ -723,24 +733,32 @@ class UI(QMainWindow):
                 QTimer.singleShot(1000, update_timer)
 
             # Store reference for later removal if needed
-            group_widget._timer_label = timer_label
-            group_widget._gif_label = gif_label
-            group_widget._movie = movie
-            group_widget._parent_layout = parent_layout
-            group_widget._parent_container = parent_container
+            # Fix: QWidget does not support arbitrary attributes, use a dict to store references
+            if not hasattr(self, '_gif_widget_refs'):
+                self._gif_widget_refs = {}
+            self._gif_widget_refs[group_widget] = {
+                'timer_label': timer_label,
+                'gif_label': gif_label,
+                'movie': movie,
+                'parent_layout': parent_layout,
+                'parent_container': parent_container
+            }
             self._active_gif_containers = [group_widget]  # Only one at a time
         except Exception:
             pass
 
     def remove_countdown_gif_and_timer(self):
         # Remove all active gif containers and their timer labels
+        # Fix: QWidget does not support arbitrary attributes, use self._gif_widget_refs
         if hasattr(self, '_active_gif_containers'):
             for gif_container in self._active_gif_containers:
                 try:
                     if gif_container is not None:
-                        if hasattr(gif_container, '_parent_layout') and gif_container._parent_layout is not None and hasattr(gif_container._parent_layout, 'removeWidget'):
+                        refs = getattr(self, '_gif_widget_refs', {}).get(gif_container, {})
+                        parent_layout = refs.get('parent_layout', None)
+                        if parent_layout is not None and hasattr(parent_layout, 'removeWidget'):
                             try:
-                                gif_container._parent_layout.removeWidget(gif_container)
+                                parent_layout.removeWidget(gif_container)
                             except Exception:
                                 pass
                         try:
@@ -751,6 +769,9 @@ class UI(QMainWindow):
                             gif_container.deleteLater()
                         except Exception:
                             pass
+                        # Remove refs for this widget
+                        if hasattr(self, '_gif_widget_refs'):
+                            self._gif_widget_refs.pop(gif_container, None)
                 except Exception:
                     pass
             try:
@@ -761,8 +782,11 @@ class UI(QMainWindow):
 
     def close_all_message_boxes(self):
         # Only close real QMessageBox instances (not StandardButton results)
-        if hasattr(self, '_upload_msgbox') and self._upload_msgbox and hasattr(self._upload_msgbox, 'isVisible') and self._upload_msgbox.isVisible():
-            self._upload_msgbox.close()
+        # Fix: _upload_msgbox may not exist, check before accessing
+        if hasattr(self, '_upload_msgbox') and getattr(self, '_upload_msgbox', None) is not None:
+            msgbox = getattr(self, '_upload_msgbox')
+            if hasattr(msgbox, 'isVisible') and msgbox.isVisible():
+                msgbox.close()
         # Do not check _warning_msgbox, as static QMessageBox.warning returns a button, not a widget
 
     def set_all_button_cursors(self):
