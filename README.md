@@ -150,6 +150,8 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
 ## Exported Results
 
 - All exports (CSV, PDF, XLSX) are saved to your Downloads directory by default.
+- The Percentage Similarity data is saved and displayed via the main.py UI to 4 decimal places no matter what (not significant figures).
+- The p-values data is, conversely, saved and displayed with 6 significant figures (not just rote decimal places).
 
 ## Full Documentation
 
