@@ -40,8 +40,8 @@ class ReturnHome:
 
         # Remove all widgets from main_layout
         if hasattr(self.ui, 'main_layout'):
-            while self.ui.main_layout.count():
-                item = self.ui.main_layout.takeAt(0)
+            while self.ui.main_layout.count(): # type: ignore
+                item = self.ui.main_layout.takeAt(0) # type: ignore
                 widget = item.widget()
                 if widget is not None:
                     widget.setParent(None)
@@ -57,28 +57,28 @@ class ReturnHome:
                 setattr(self.ui, attr, None)
 
         # Remove any background label
-        if hasattr(self.ui, 'background_label') and self.ui.background_label is not None:
-            self.ui.background_label.setParent(None)
-            self.ui.background_label.deleteLater()
-            self.ui.background_label = None
+        if hasattr(self.ui, 'background_label') and self.ui.background_label is not None: # type: ignore
+            self.ui.background_label.setParent(None) # type: ignore
+            self.ui.background_label.deleteLater() # type: ignore
+            self.ui.background_label = None # type: ignore
         # Reset state in AnalysisEngine and ExportFindings
         if hasattr(self.ui, 'ae'):
-            self.ui.ae.filename = None
-            self.ui.ae.wavelengths = None
-            self.ui.ae.absorbance = None
-            self.ui.ae.positive_control = None
+            self.ui.ae.filename = None # type: ignore
+            self.ui.ae.wavelengths = None # type: ignore
+            self.ui.ae.absorbance = None # type: ignore # type: ignore
+            self.ui.ae.positive_control = None # type: ignore # type: ignore
 
-            self.ui.ae.sample_names = []
-            self.ui.ae.num_analytes = 0
-            self.ui.ae.processed = None
+            self.ui.ae.sample_names = [] # type: ignore
+            self.ui.ae.num_analytes = 0 # type: ignore
+            self.ui.ae.processed = None # type: ignore
         if hasattr(self.ui, 'ef'):
-            if hasattr(self.ui.ef, '_export_table_data'):
-                self.ui.ef._export_table_data = None
-            if hasattr(self.ui.ef, '_export_table_headers'):
-                self.ui.ef._export_table_headers = None
+            if hasattr(self.ui.ef, '_export_table_data'): # type: ignore
+                self.ui.ef._export_table_data = None # type: ignore
+            if hasattr(self.ui.ef, '_export_table_headers'): # type: ignore
+                self.ui.ef._export_table_headers = None # type: ignore
 
         # Re-render the UI from scratch
-        self.ui.render_ui()
+        self.ui.render_ui() # type: ignore
         QApplication.processEvents()
 
     def return_home_from_sucess(self):

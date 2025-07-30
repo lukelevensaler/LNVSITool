@@ -60,9 +60,10 @@ AUTO_SAVE_FILE = os.path.join(autosave_dir, "autosave.json") # CALLED IN OTHER M
 assets_dir = os.path.join(project_root, "assets")
 
 def resource_path(filename): # CALLED IN OTHER MODULES
-    if hasattr(sys, '_MEIPASS'):
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
         # Running in a PyInstaller bundle
-        return os.path.join(sys._MEIPASS, "assets", filename)
+        return os.path.join(meipass, "assets", filename)
     else:
         # Running in development
         return os.path.join(assets_dir, filename)

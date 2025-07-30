@@ -18,3 +18,5 @@ venv/
 dist/
 build/
 
+# DO NOT ADD .hintrc to this .gitignore, it is used to vents IDE-related "bugs" related to various aspects of the HTML assets.
+# Those HTMLs are not web pages, just rich text assets.
