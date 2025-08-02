@@ -392,45 +392,63 @@ class AnalysisEngine:
 			return query
 
 	def deconvolve_voigt(self, x, y):
-		
 		try:
 			self.ui.show_countdown_gif(self.ui.progress_bar_row, self.ui.progress_container, trigger_type='progress', duration_ms=3000)
-			logging.info("Starting deconvolve_voigt method.")
+			logging.info("Starting deconvolve_voigt method (multi-peak).")
 			QApplication.processEvents()
 
-			# Voigt function for lmfit
-			def voigt_profile(x, amp, cen, sigma, gamma):
-				try:
-					z = ((x - cen) + 1j * gamma) / (sigma * np.sqrt(2))
-					return amp * np.real(wofz(z)) / (sigma * np.sqrt(2 * np.pi))
-				except Exception as e:
-					logging.warning(f"Exception in Voigt function: {e}")
-					return np.full_like(x, np.nan)
+			# Detect all peaks (including faint ones)
+			from scipy.signal import find_peaks
+			peaks, _ = find_peaks(y, height=np.max(y)*0.05, prominence=np.max(y)*0.01, distance=max(1, int(len(x)/50)))
+			n_peaks = len(peaks)
+			logging.info(f"Detected {n_peaks} peaks for multi-peak fitting.")
+			if n_peaks == 0:
+				logging.warning("No peaks detected, using original data.")
+				self.ui.remove_countdown_gif_and_timer()
+				return y
 
-			# lmfit implementation
+			# Prepare initial guesses for all peaks
+			amps = y[peaks]
+			cens = x[peaks]
+			sigmas = np.full(n_peaks, np.std(x)/10)
+			gammas = np.full(n_peaks, np.std(x)/10)
+
+			# Multi-peak Voigt fitting with lmfit
+			def multi_voigt(x, *params):
+				total = np.zeros_like(x)
+				for i in range(n_peaks):
+					amp = params[i*4]
+					cen = params[i*4+1]
+					sigma = params[i*4+2]
+					gamma = params[i*4+3]
+					z = ((x - cen) + 1j * gamma) / (sigma * np.sqrt(2))
+					total += amp * np.real(wofz(z)) / (sigma * np.sqrt(2 * np.pi))
+				return total
+
+			fit_success = False
+			fit = None
 			try:
-				model = lmfit.Model(voigt_profile)
-				amp_guess = float(np.max(y))
-				cen_guess = float(x[np.argmax(y)])
-				sigma_guess = float(np.std(x) / 5)
-				gamma_guess = float(np.std(x) / 5)
-				params = model.make_params(
-					amp=amp_guess,
-					cen=cen_guess,
-					sigma=sigma_guess,
-					gamma=gamma_guess
-				)
-				# Set reasonable bounds
-				params['amp'].set(min=0)
-				params['sigma'].set(min=1e-6, max=(x.max()-x.min()))
-				params['gamma'].set(min=1e-6, max=(x.max()-x.min()))
-				params['cen'].set(min=x.min(), max=x.max())
+				# Build lmfit Parameters
+				params = lmfit.Parameters()
+				for i in range(n_peaks):
+					params.add(f'amp{i}', value=amps[i], min=0)
+					params.add(f'cen{i}', value=cens[i], min=x.min(), max=x.max())
+					params.add(f'sigma{i}', value=sigmas[i], min=1e-6, max=(x.max()-x.min()))
+					params.add(f'gamma{i}', value=gammas[i], min=1e-6, max=(x.max()-x.min()))
+				def lmfit_multi_voigt(x, **kwargs):
+					p = [kwargs[f'amp{i}'] for i in range(n_peaks)] + [kwargs[f'cen{i}'] for i in range(n_peaks)] + [kwargs[f'sigma{i}'] for i in range(n_peaks)] + [kwargs[f'gamma{i}'] for i in range(n_peaks)]
+					# Reorder to amp, cen, sigma, gamma for each peak
+					p_ordered = []
+					for i in range(n_peaks):
+						p_ordered += [kwargs[f'amp{i}'], kwargs[f'cen{i}'], kwargs[f'sigma{i}'], kwargs[f'gamma{i}']]
+					return multi_voigt(x, *p_ordered)
+				model = lmfit.Model(lmfit_multi_voigt)
 				result = model.fit(y, params, x=x)
 				if not result.success or np.any(np.isnan(result.best_fit)):
-					raise RuntimeError(f"lmfit Voigt fit failed: {result.message}")
+					raise RuntimeError(f"lmfit multi-peak Voigt fit failed: {result.message}")
 				fit = result.best_fit
 				fit_success = True
-				logging.info(f"lmfit Voigt fit succeeded. Fit report: {result.fit_report()}")
+				logging.info(f"lmfit multi-peak Voigt fit succeeded. Fit report: {result.fit_report()}")
 			except ImportError as e:
 				logging.error("lmfit is not installed. Please install lmfit for robust Voigt fitting.")
 				if not ErrorManager.errors_suppressed:
@@ -438,21 +456,30 @@ class AnalysisEngine:
 				fit_success = False
 				fit = None
 			except Exception as fit_err:
-				logging.warning(f"lmfit Voigt fit failed with error: {fit_err}")
+				logging.warning(f"lmfit multi-peak Voigt fit failed with error: {fit_err}")
 				fit_success = False
 				fit = None
 
 			if not fit_success:
-				# Fallback: fit a simple Gaussian using scipy
+				# Fallback: fit multiple Gaussians using scipy
 				from scipy.optimize import curve_fit
-				def gauss(x, amp, cen, sigma):
-					return amp * np.exp(-0.5 * ((x - cen) / sigma) ** 2)
+				def multi_gauss(x, *params):
+					total = np.zeros_like(x)
+					for i in range(n_peaks):
+						amp = params[i*3]
+						cen = params[i*3+1]
+						sigma = params[i*3+2]
+						total += amp * np.exp(-0.5 * ((x - cen) / sigma) ** 2)
+					return total
+				p0 = []
+				for i in range(n_peaks):
+					p0 += [amps[i], cens[i], sigmas[i]]
 				try:
-					popt, _ = curve_fit(gauss, x, y, p0=[np.max(y), x[np.argmax(y)], np.std(x)/5], maxfev=3000)
-					fit = gauss(x, *popt)
-					logging.info("Fallback Gaussian fit succeeded.")
+					popt, _ = curve_fit(multi_gauss, x, y, p0=p0, maxfev=5000)
+					fit = multi_gauss(x, *popt)
+					logging.info("Fallback multi-peak Gaussian fit succeeded.")
 				except Exception as gauss_err:
-					logging.warning(f"Fallback Gaussian fit also failed: {gauss_err}")
+					logging.warning(f"Fallback multi-peak Gaussian fit also failed: {gauss_err}")
 					fit = y  # Use original data as fallback
 
 			if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
@@ -460,7 +487,7 @@ class AnalysisEngine:
 			if hasattr(self.ui, 'set_splash_text'):
 				self.ui.set_splash_text()
 			QApplication.processEvents()
-			logging.info("Voigt (or fallback) fit complete.")
+			logging.info("Multi-peak Voigt (or fallback) fit complete.")
 			self.ui.remove_countdown_gif_and_timer()
 			return fit
 		except Exception as e:
