@@ -1,11 +1,8 @@
-""" 
-Essential configuration logic for the whole application.
-"""
-
-# Import necessary modules
 import os
+import sys
 import logging
 import warnings
+import traceback
 from PyQt6.QtCore import QUrl
 
 # Set up project-relative utils dir (user-writable, not system dir)
@@ -18,7 +15,7 @@ utilsfolder = os.path.join(user_home, "LNVSI Tool Utilities")
 if not os.path.exists(utilsfolder):
     os.makedirs(utilsfolder)
 
-# Set up logging (still in utilsfolder)
+# Set up logging (still in utils folder)
 log_dir = os.path.join(utilsfolder, "Logs")
 LOG_FILE = os.path.join(log_dir, "LNVSI Tool.log") # CALLED IN OTHER MODULES
 
@@ -36,16 +33,11 @@ logging.basicConfig(
 
 # Redirect all warnings (including OptimizeWarning, DeprecationWarning, etc.) to the logging system
 logging.captureWarnings(True)
+warnings.simplefilter('always') # Warnings always show and log with stack info
 
-# Optionally, customize warnings to always show and log with stack info
-warnings.simplefilter('always')
-
-# Add a handler for uncaught exceptions to log them with traceback
-import sys
-
+# Handler for uncaught exceptions to log them with traceback
 def log_uncaught_exceptions(exctype, value, tb):
-    import traceback
-    logging.critical("Uncaught exception:", exc_info=(exctype, value, tb))
+    logging.critical("Uncaught exception: %s\n%s", value, tb.format_exception(exctype, value, tb))
     sys.__excepthook__(exctype, value, tb)
 
 sys.excepthook = log_uncaught_exceptions
