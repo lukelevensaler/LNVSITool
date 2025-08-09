@@ -215,7 +215,7 @@ class AnalysisEngine:
 				valid_samples.append(name)
 			if len(valid_samples) < 2:
 				raise ValueError("CSV must contain at least 'positive control' and one analyte column after 'nm'.")
-			# CHANGED: Only store 1D absorbance arrays, not tuples
+
 			data = {name: df[name].values for name in valid_samples}
 			self.wavelengths = wavelengths
 			self.absorbance = data
