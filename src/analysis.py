@@ -3,6 +3,7 @@ The actual backend analysis algorithm
 """
 
 # Basic Imports
+import os
 import logging
 import time
 import json
@@ -16,6 +17,8 @@ from scipy.interpolate import CubicSpline
 from scipy.fft import fft, ifft
 from scipy.stats import pearsonr
 from scipy.special import wofz
+from scipy.signal import find_peaks
+from scipy.optimize import curve_fit
 from skopt import gp_minimize
 from skopt.space import Integer
 from fastdtw import fastdtw # type: ignore
@@ -397,8 +400,6 @@ class AnalysisEngine:
 			logging.info("Starting deconvolve_voigt method (multi-peak).")
 			QApplication.processEvents()
 
-			# Detect all peaks (including faint ones)
-			from scipy.signal import find_peaks
 			peaks, _ = find_peaks(y, height=np.max(y)*0.05, prominence=np.max(y)*0.01, distance=max(1, int(len(x)/50)))
 			n_peaks = len(peaks)
 			logging.info(f"Detected {n_peaks} peaks for multi-peak fitting.")
@@ -461,8 +462,8 @@ class AnalysisEngine:
 				fit = None
 
 			if not fit_success:
+
 				# Fallback: fit multiple Gaussians using scipy
-				from scipy.optimize import curve_fit
 				def multi_gauss(x, *params):
 					total = np.zeros_like(x)
 					for i in range(n_peaks):
@@ -672,7 +673,6 @@ class AnalysisEngine:
 			logging.info("All samples analyzed. Returning results.")
 			try:
 				logging.info("Autosaving results to JSON file.")
-				import os
 				autosave_dir = os.path.dirname(auto_save_file)
 				if not os.path.exists(autosave_dir):
 					os.makedirs(autosave_dir)
@@ -794,6 +794,7 @@ class AnalysisEngine:
 			logging.info("SAP guard dialog already shown, skipping duplicate.")
 			return True  # or False, depending on your logic
 		self._sap_guard_shown = True
+
 		# Import resource_path here to avoid circular import
 		from main import resource_path
 		test_report_success = resource_path("test_report_success.html")
