@@ -1,7 +1,7 @@
 
 # LNVSI Tool (Levensaler Neogastropod Venomic Similarity Index Tool)
 
-A PyQt6-based GUI application for venomic data analysis, spectral deconvolution, and statistical similarity indexing of neogastropod peptidomes.
+A PyQt6-based GUI application for analyzing LIMCALA spectrophotometry data with the SAP classical machine learning-based Levensaler Neogastropod Venomic Similarity Indexing (LNVSI) algorithm
 
 ## Features
 
@@ -16,7 +16,7 @@ A PyQt6-based GUI application for venomic data analysis, spectral deconvolution,
 
 ## Installation the Normal Way
 
-- Go to [https://conowareproject.org/software/LNSVI](https://conowareproject.org/software/LNSVI) to download the installer package for your operating system
+- Go to [https://conowareproject.org/software/LNSVI](https://conowareproject.org/software/LNVSI) to download the installer package for your operating system
 
 ## Installation From Source
 
