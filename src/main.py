@@ -39,7 +39,7 @@ logging.basicConfig(
 class UI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ConoWare Levensaler Neogastropod Venomic Similarity Indexing Tool (Beta)")
+        self.setWindowTitle("ConoWare Levensaler Neogastropod Venomic Similarity Indexing Tool")
         self.setGeometry(100, 100, 800, 600)
         self.setMinimumSize(1000, 800)
        
