@@ -12,7 +12,7 @@
 
 - You agree not to plagiarize my actual biochemical findings and associated intellectual property using the Software.
 
-- The mathematical workflow of the LNSVI Tool's algorithmic backend Python code located in src/analysis.py is my original work. You agree to refer to it with my name and cite me if you publish academic research of any kind using the Software or a derived workflow in any capacity within your procedures. Such exact conduct ensures that you are not plagiarizing my actual biochemical findings and associated intellectual property using the Software.
+- The mathematical workflow of the LNVSI Tool's algorithmic backend Python code located in src/analysis.py is my original work. You agree to refer to it with my name and cite me if you publish academic research of any kind using the Software or a derived workflow in any capacity within your procedures. Such exact conduct ensures that you are not plagiarizing my actual biochemical findings and associated intellectual property using the Software.
   
 - The Software and all other ConoWare software is exclusively open-source for entities and individuals who meet the eligibility criteria of being strictly without the prevailing or original intent or end impact of generating profits off of my research or the Software and, additionally for entities, non-profit status and lack of direct connection to for-profit entities or ineligible individuals. You agree not to to fork, use, decompile, and modify it if you do not meet those criteria.
 

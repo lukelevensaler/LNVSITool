@@ -16,7 +16,7 @@ A PyQt6-based GUI application for analyzing spectrophotometry data from Levensal
 
 ## Installation the Normal Way
 
-- Go to [https://conowareproject.org/software/LNSVI](https://conowareproject.org/software/LNVSI) to download the installer package for your operating system
+- Go to [https://conowareproject.org/software/LNVSI](https://conowareproject.org/software/LNVSI) to download the installer package for your operating system
 
 ## Installation From Source
 
@@ -145,7 +145,7 @@ A PyQt6-based GUI application for analyzing spectrophotometry data from Levensal
 
 ## Logging
 
-- Logs and Autosave file can be found in the LNSVI Tool Utilities Directory the application creates upon usage in your "~" directory (home directory)
+- Logs and Autosave file can be found in the LNVSI Tool Utilities Directory the application creates upon usage in your "~" directory (home directory)
 
 ## Exported Results
 
