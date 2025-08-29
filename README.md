@@ -1,7 +1,7 @@
 
 # LNVSI Tool (Levensaler Neogastropod Venomic Similarity Index Tool)
 
-A PyQt6-based GUI application for analyzing LIMCALA spectrophotometry data with the SAP classical machine learning-based Levensaler Neogastropod Venomic Similarity Indexing (LNVSI) algorithm
+A PyQt6-based GUI application for analyzing spectrophotometry data from Levensaler Immobilized Metal Chelate Affinity Labelling Assay (LIMCALA)-based marine Neogastropod venomic analysis with the SAP classical machine learning-based Levensaler Neogastropod Venomic Similarity Indexing (LNVSI) algorithm
 
 ## Features
 
