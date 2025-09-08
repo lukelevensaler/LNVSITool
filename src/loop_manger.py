@@ -33,7 +33,7 @@ class ReturnHome:
     def __init__(self, ui: object = None):
         self.ui = ui  # UI is an instance of the UI (QMainWindow) class
     
-    def _full_reset(self):
+    def full_reset(self):
 
         # Turn errors back on
         ErrorManager.SetErrorsPaused(False)
@@ -82,17 +82,17 @@ class ReturnHome:
         QApplication.processEvents()
 
     def return_home_from_sucess(self):
-        self._full_reset()
+        self.full_reset()
         logging.info("Returning home from success state.")
 
     def return_home_from_error(self):
-        self._full_reset()
+        self.full_reset()
         logging.info("Returning home from error state.")
 
     def return_home_from_cancel(self):
-        self._full_reset()
+        self.full_reset()
         logging.info("Returning home from cancel state.")
 
     def return_home_from_discard(self):
-        self._full_reset()
+        self.full_reset()
         logging.info("Returning home from discard state.")
