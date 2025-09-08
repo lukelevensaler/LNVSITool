@@ -51,10 +51,10 @@ def log_uncaught_exceptions(exctype, value, tb):
 sys.excepthook = log_uncaught_exceptions
 
 # Set up autosave
-autosave_dir = os.path.join(utilsfolder, "Autosaved Data Entry Results")
+autosave_dir = os.path.join(utilsfolder, "Autosaves")
 if not os.path.exists(autosave_dir):
     os.makedirs(autosave_dir)
-AUTO_SAVE_FILE = os.path.join(autosave_dir, "autosave.json") # CALLED IN OTHER MODULES
+AUTO_SAVE_RESULTS_FILE = os.path.join(autosave_dir, "autosave_results.json") # CALLED IN OTHER MODULES
 
 # Asset paths using project-relative assets directory
 assets_dir = os.path.join(project_root, "assets")

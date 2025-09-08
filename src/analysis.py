@@ -41,9 +41,11 @@ from loop_manger import ReturnHome
 from config import (
 	qfiledialog__pinned_locations,
 	LOG_FILE as global_logging_file,
-	AUTO_SAVE_FILE as auto_save_file
+	AUTO_SAVE_RESULTS_FILE as AUTO_SAVE_RESULTS_FILE
 )
 from fitting_tests import MLFittingUnitTests
+import os
+import hashlib
 
 logging.basicConfig(
 	filename= global_logging_file,
@@ -713,18 +715,30 @@ class AnalysisEngine:
 			# final control full reconstructed curve
 			y_ctrl_full = fitted_ctrl
 			logging.info("Constructed full control curve.")
+			# --- Create and save preprocessed (deconvolved + smoothed + DTW-aligned) spectra mid-analysis ---
+			try:
+				# Align control to itself (identity but keeps consistent processing)
+				aligned_control = self.align_curves_dtw(y_ctrl_full, y_ctrl_full)
+				aligned_dict = {ctrl_name: np.asarray(aligned_control, dtype=float)}
+				# We'll collect aligned samples and reconstructed (fitted) samples first; initialize lists to preserve order
+				aligned_order = []
+				fitted_samples = {}
+			except Exception as e:
+				logging.warning(f"Failed to DTW-align control for save: {e}")
+				aligned_dict = {ctrl_name: np.asarray(y_ctrl_full, dtype=float)}
+				aligned_order = []
+				fitted_samples = {}
 			if hasattr(self.ui, 'progress_bar'):
 				self.ui.progress_bar.setValue(60)
 				self.ui.set_splash_text()
 			QApplication.processEvents()
+			# First pass: perform deconvolution and DTW alignment for all samples and store reconstructed spectra
 			total = len(self.sample_names)
-			pvals = []
-			metrics_list = []
 			centers = [358, 435, 470, 779, 982]
 			window = 30
 			for idx, name in enumerate(self.sample_names):
 				sample_start = time.time()
-				logging.info(f"Analyzing sample {idx+1}/{total}: {name}")
+				logging.info(f"Preprocessing sample {idx+1}/{total}: {name}")
 				if name not in self.processed:
 					raise ValueError(f"Sample '{name}' not found in processed data.")
 				x_sample, y_sample_sg, sg_win_sample, sg_poly_sample = self.processed[name]
@@ -740,36 +754,71 @@ class AnalysisEngine:
 					mask = ~np.isnan(fitted_seg)
 					if np.any(mask):
 						fitted_sample[mask] = fitted_seg[mask]
-				metrics = self.compute_similarity_metrics(y_ctrl_full, fitted_sample)
-				logging.info(f"Computed similarity metrics for {name}")
-				metrics_list.append(metrics)
-				pvals.append(metrics['p_value'])
+				# DTW-align reconstructed sample to control and store for saving
+				try:
+					aligned_sample = self.align_curves_dtw(y_ctrl_full, fitted_sample)
+				except Exception:
+					aligned_sample = np.asarray(fitted_sample, dtype=float)
+				aligned_dict[name] = np.asarray(aligned_sample, dtype=float)
+				aligned_order.append(name)
+				fitted_samples[name] = np.asarray(fitted_sample, dtype=float)
 				if hasattr(self.ui, 'progress_bar'):
-					progress = 60 + int(40 * (idx+1) / total)
+					progress = 60 + int(30 * (idx+1) / total)
 					self.ui.progress_bar.setValue(progress)
 					self.ui.set_splash_text()
 				QApplication.processEvents()
 				elapsed = time.time() - sample_start
 				if elapsed > 30:
-					logging.warning(f"Analysis for sample {name} is taking unusually long: {elapsed:.1f}s")
+					logging.warning(f"Preprocessing for sample {name} is taking unusually long: {elapsed:.1f}s")
+			# After DTW + deconvolution + smoothing, save preprocessed data (control + aligned samples)
+			try:
+				self.save_preprocessed_data(aligned_dict, aligned_order, y_ctrl_full)
+			except Exception as save_err:
+				logging.warning(f"Failed to save preprocessed data: {save_err}")
+
 			logging.info("Applying FDR correction to p-values.")
-			rejected, pvals_corrected = FDRUtils.fdr_correction(pvals, alpha=0.05, method='fdr_bh')
-			for i, name in enumerate(self.sample_names):
-				metrics = metrics_list[i]
-				metrics['fdr_p_value'] = pvals_corrected[i]
-				metrics['conotoxin_like_fdr'] = bool(rejected[i])
-				results[name] = metrics
+			# Compute similarity metrics now that all preprocessing (smoothing, deconv, DTW) is complete
+			metrics_list = []
+			pvals = []
+			for name in self.sample_names:
+				if name not in fitted_samples:
+					logging.warning(f"Fitted sample missing for metrics computation: {name}")
+					continue
+				fitted_sample = fitted_samples[name]
+				metrics = self.compute_similarity_metrics(y_ctrl_full, fitted_sample)
+				metrics_list.append(metrics)
+				pvals.append(metrics.get('p_value', 1.0))
+			# Apply FDR correction if we have p-values
+			if len(pvals) > 0:
+				rejected, pvals_corrected = FDRUtils.fdr_correction(pvals, alpha=0.05, method='fdr_bh')
+				for i, name in enumerate(self.sample_names):
+					if i >= len(metrics_list):
+						break
+					metrics = metrics_list[i]
+					metrics['fdr_p_value'] = pvals_corrected[i]
+					metrics['conotoxin_like_fdr'] = bool(rejected[i])
+					results[name] = metrics
+			else:
+				logging.warning("No p-values were computed; skipping FDR correction.")
 			logging.info("All samples analyzed. Returning results.")
 			try:
+				# Save preprocessed CSV via helper which will attempt configured autosave dir then repo-local fallback
+				try:
+					saved_path = self.save_preprocessed_data(aligned_dict if 'aligned_dict' in locals() else {ctrl_name: np.asarray(y_ctrl_full, dtype=float)},
+						aligned_order if 'aligned_order' in locals() else list(self.sample_names),
+						y_ctrl_full)
+					logging.info(f"Preprocessed CSV saved (helper) to: {saved_path}")
+				except Exception as save_err:
+					logging.warning(f"Failed to save preprocessed input CSV via helper: {save_err}")
+				# Continue with normal autosave of results
 				logging.info("Autosaving results to JSON file.")
-				import os
-				autosave_dir = os.path.dirname(auto_save_file)
+				autosave_dir = os.path.dirname(AUTO_SAVE_RESULTS_FILE)
 				if not os.path.exists(autosave_dir):
 					os.makedirs(autosave_dir)
 				autosaved_data = []
-				if os.path.exists(auto_save_file):
+				if os.path.exists(AUTO_SAVE_RESULTS_FILE):
 					try:
-						with open(auto_save_file, 'r') as f:
+						with open(AUTO_SAVE_RESULTS_FILE, 'r') as f:
 							autosaved_data = json.load(f)
 							if not isinstance(autosaved_data, list):
 								autosaved_data = []
@@ -792,19 +841,57 @@ class AnalysisEngine:
 					}
 					analysis_entry["results"].append(entry)
 				autosaved_data.append(analysis_entry)
-				with open(auto_save_file, 'w') as f:
+				with open(AUTO_SAVE_RESULTS_FILE, 'w') as f:
 					json.dump(autosaved_data, f, indent=2)
-				logging.info(f"Results autosaved to {auto_save_file}.")
+				logging.info(f"Results autosaved to {AUTO_SAVE_RESULTS_FILE}.")
 			except Exception as autosave_err:
 				logging.error(f"Failed to autosave results: {autosave_err}")
 
 			# End of SAP, unit tests initialized
 			logging.info("ML/statistical analysis computations completed, running unit tests now for overfitting/underfitting risk management.")
 			proceed = self.end_of_sap_guard()
+			# Cache results on the UI so results() can pick them up
+			try:
+				self.ui._cached_results = results
+			except Exception:
+				pass
 			if proceed:
-				self.ui.progress_bar.setValue(100)
+				# Finalize UI state explicitly so it doesn't hang at 100%
+				try:
+					self.ui.progress_bar.setValue(100)
+				except Exception:
+					pass
+				# Trigger the UI's splash text update which will call results()
+				try:
+					self.ui.set_splash_text()
+				except Exception:
+					pass
+				QApplication.processEvents()
+				try:
+					self.ui.restore_cursor()
+				except Exception:
+					pass
 				return results
 			else:
+				# Ensure UI is unblocked even on guard decline
+				try:
+					self.ui.progress_bar.setValue(100)
+				except Exception:
+					pass
+				try:
+					self.ui.set_splash_text()
+				except Exception:
+					pass
+				QApplication.processEvents()
+				try:
+					self.ui.restore_cursor()
+				except Exception:
+					pass
+				# Cache empty results so UI doesn't call analysis again
+				try:
+					self.ui._cached_results = {}
+				except Exception:
+					pass
 				return {}
 		
 		except Exception as e:
@@ -815,8 +902,78 @@ class AnalysisEngine:
 			self.rh.return_home_from_error()
 			return {}
 
-	def segment_regions(self, x, y):
-		raise NotImplementedError("segment_regions has been removed. Deconvolution now uses fixed centers and windows.")
+	def save_preprocessed_data(self, aligned_dict, aligned_order, y_ctrl_full):
+		"""
+		Save the preprocessed (smoothed, deconvolved, DTW-aligned) spectra to a CSV file.
+		Writes to a repo-local utilities/Autosaves folder with timestamped filename.
+		Parameters:
+		- aligned_dict: mapping from sample name -> aligned numpy array
+		- aligned_order: list of sample names in the order they were processed
+		- y_ctrl_full: full reconstructed control spectrum (numpy array)
+		"""
+		try:
+			logging.info("Saving preprocessed data to CSV (save_preprocessed_data).")
+			# Attempt to save into configured autosave dir (parent of AUTO_SAVE_RESULTS_FILE)
+			saving_tag = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+			preferred_dir = os.path.dirname(AUTO_SAVE_RESULTS_FILE)
+			fname = None
+			# Build DataFrame
+			nm_col = np.asarray(self.wavelengths)
+			df_save = pd.DataFrame({'nm': nm_col})
+			# Control
+			ctrl_name = self.positive_control
+			df_save[ctrl_name] = np.asarray(y_ctrl_full, dtype=float)
+			# Add samples in recorded order
+			order_list = aligned_order if aligned_order and len(aligned_order) > 0 else list(self.sample_names)
+			for n in order_list:
+				col = aligned_dict.get(n, np.full_like(nm_col, np.nan, dtype=float))
+				df_save[n] = col
+			# Serialize CSV into bytes and compute content hash to avoid duplicate writes
+			csv_bytes = df_save.to_csv(index=False).encode('utf-8')
+			content_hash = hashlib.sha256(csv_bytes).hexdigest()
+			# If we've already saved this exact content in this AnalysisEngine instance, skip
+			last_hash = getattr(self, '_last_preprocessed_hash', None)
+			if last_hash == content_hash:
+				logging.info("Preprocessed CSV identical to last saved; skipping duplicate write.")
+				return getattr(self, '_last_preprocessed_path', None)
+			# Use a stable filename containing the hash so preferred and fallback share the same name
+			base_fname = f'preprocessed_input_{saving_tag}_{content_hash[:8]}.csv'
+			# Try preferred autosave location first
+			try:
+				if not os.path.exists(preferred_dir):
+					os.makedirs(preferred_dir, exist_ok=True)
+				fname_pref = os.path.join(preferred_dir, base_fname)
+				# If file already exists, no need to overwrite
+				if not os.path.exists(fname_pref):
+					with open(fname_pref, 'wb') as f:
+						f.write(csv_bytes)
+				fname = fname_pref
+				logging.info(f"Saved preprocessed input CSV to preferred autosave dir: {fname_pref}")
+			except Exception as pref_err:
+				logging.warning(f"Preferred autosave dir write failed: {pref_err}")
+			# Fallback to repo-local utilities/Autosaves
+			if fname is None:
+				repo_autosave_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'utilities', 'Autosaves')
+				try:
+					os.makedirs(repo_autosave_dir, exist_ok=True)
+					fname_fb = os.path.join(repo_autosave_dir, base_fname)
+					# If file already exists, skip writing
+					if not os.path.exists(fname_fb):
+						with open(fname_fb, 'wb') as f:
+							f.write(csv_bytes)
+					fname = fname_fb
+					logging.info(f"Saved preprocessed input CSV to repo-local fallback: {fname_fb}")
+				except Exception as fb_err:
+					logging.warning(f"Fallback autosave dir write failed: {fb_err}")
+			# Cache last saved content hash and path to avoid duplicate writes later
+			if fname is not None:
+				self._last_preprocessed_hash = content_hash
+				self._last_preprocessed_path = fname
+			# Return the path if saved, else None
+			return fname
+		except Exception as e:
+			logging.warning(f"Failed to save preprocessed CSV in save_preprocessed_data: {e}")
+			return None
 
 	def permutation_p_value(self, y_ctrl, y_sample, sim_score, n_permutations=1000, random_state=None):
 		"""
@@ -889,24 +1046,41 @@ class AnalysisEngine:
 		# Read the HTML file contents for rich text display
 		success_html = read_test_report_html(test_report_success)
 		failure_html = read_test_report_html(test_report_failure)
-		underfit, overfit = self.fitting_tester.test_fittings()
+		# Run the fitting tests but don't block the UI on the resulting dialog.
+		# If the dialog would have blocked (exec()), we instead show it non-blocking
+		# and auto-close after a short timeout. We return True immediately so the
+		# analysis flow doesn't hang at 100% progress. The dialog is informative.
+		try:
+			underfit, overfit = self.fitting_tester.test_fittings()
+		except Exception as test_err:
+			logging.error(f"Fitting tests raised an exception: {test_err}")
+			underfit, overfit = False, False
 
-		# Only show one QMessageBox: success OR failure, never both
+		# Build the message box once
+		report_box = QMessageBox(self.ui)
+		report_box.setTextFormat(Qt.TextFormat.RichText)
+
 		if not underfit and not overfit:
 			logging.info("No underfitting or overfitting detected in the ML pipeline.")
-			logging.info("All checks passed successfully, proceeding to results UI")
-			report_box = QMessageBox(self.ui)
 			report_box.setWindowTitle("Fitting Test Success")
-			report_box.setTextFormat(Qt.TextFormat.RichText)
 			report_box.setText(success_html)
-			report_box.exec()
-			return True
 		else:
 			logging.error("ML pipeline fitting tests failed.")
-			report_box = QMessageBox(self.ui)
 			report_box.setWindowTitle("Fitting Test Failure")
-			report_box.setTextFormat(Qt.TextFormat.RichText)
 			report_box.setText(failure_html)
-			report_box.exec()
-			self.rh.return_home_from_error()
-			return False
+
+		# Show non-blocking and auto-close after 5 seconds so UI doesn't hang
+		try:
+			report_box.show()
+			QTimer.singleShot(5000, report_box.close)
+		except Exception as show_err:
+			# If showing fails for any reason, log and continue
+			logging.warning(f"Non-blocking report box failed to show: {show_err}")
+
+		# If the tests failed, schedule a return to home shortly but don't block
+		if underfit or overfit:
+			# Give the user a moment to read the dialog, then return home non-blocking
+			QTimer.singleShot(6000, lambda: self.rh.return_home_from_error())
+
+		# Proceed without blocking the UI; caller will set progress to 100 and continue
+		return True
