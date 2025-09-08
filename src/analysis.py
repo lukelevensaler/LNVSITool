@@ -11,9 +11,8 @@ import datetime
 # Data Science Imports
 import numpy as np
 import pandas as pd
-from scipy.signal import savgol_filter
-from scipy.interpolate import CubicSpline
-from scipy.fft import fft, ifft
+from scipy.signal import savgol_filter, find_peaks
+# Use Savitzky-Golay only for smoothing; remove cubic spline and fft-based lowpass
 from scipy.stats import pearsonr
 from scipy.special import wofz
 from skopt import gp_minimize
@@ -21,6 +20,7 @@ from skopt.space import Integer
 from fastdtw import fastdtw # type: ignore
 import decimal
 import lmfit
+import warnings
 
 # Machine Learning Imports
 from sklearn.decomposition import PCA
@@ -49,6 +49,14 @@ logging.basicConfig(
 	filename= global_logging_file,
 	level=logging.DEBUG,
 	format='%(asctime)s - %(levelname)s - %(message)s - %(lineno)d'
+)
+
+# Suppress a noisy but non-fatal warning coming from the 'uncertainties' package
+# which some downstream libraries may use when an uncertainty's std_dev==0.
+warnings.filterwarnings(
+	"ignore",
+	message=r"Using UFloat objects with std_dev==0 may give unexpected results\.",
+	category=UserWarning,
 )
 
 # Remove any import of main or UI to prevent circular import errors
@@ -212,7 +220,7 @@ class AnalysisEngine:
 				valid_samples.append(name)
 			if len(valid_samples) < 2:
 				raise ValueError("CSV must contain at least 'positive control' and one analyte column after 'nm'.")
-			# CHANGED: Only store 1D absorbance arrays, not tuples
+			# Only store 1D absorbance arrays, not tuples
 			data = {name: df[name].values for name in valid_samples}
 			self.wavelengths = wavelengths
 			self.absorbance = data
@@ -259,8 +267,9 @@ class AnalysisEngine:
 				if x is None or len(x) != len(y):
 					logging.error(f"Length mismatch for '{name}': x({len(x) if x is not None else 'None'}), y({len(y)})")
 					raise ValueError(f"Length mismatch for '{name}': x({len(x) if x is not None else 'None'}), y({len(y)})")
-				x_smooth, y_smooth = self.smooth_curve(x, y)
-				processed[name] = (x_smooth, y_smooth)  # Store tuple (x, y)
+				x_smooth, y_smooth, sg_win, sg_poly = self.smooth_curve(x, y)
+				# Store tuple (x, y_smoothed, sg_window, sg_poly)
+				processed[name] = (x_smooth, y_smooth, sg_win, sg_poly)
 			if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
 				self.ui.progress_bar.setValue(35)
 			if hasattr(self.ui, 'set_splash_text'):
@@ -278,56 +287,41 @@ class AnalysisEngine:
 
 	def smooth_curve(self, x, y):
 		try:
+			# Simplified smoothing: use Savitzky-Golay directly on the original sampled data
 			self.ui.show_countdown_gif(self.ui.progress_bar_row, self.ui.progress_container, trigger_type='progress', duration_ms=3000)
-			logging.info("Starting smooth_curve method.")
+			logging.info("Starting smooth_curve method (Savitzky-Golay only).")
 			QApplication.processEvents()
-			def lowpass_filter(y, cutoff_ratio=0.1):
-				logging.info("Applying lowpass filter.")
-				N = len(y)
-				yf = np.array(fft(y))
-				cutoff = int(N * cutoff_ratio)
-				yf[cutoff:-cutoff] = 0
-				if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
-					self.ui.progress_bar.setValue(25)
-				if hasattr(self.ui, 'set_splash_text'):
-					self.ui.set_splash_text()
-				QApplication.processEvents()
-				logging.info("Lowpass filter applied.")
-				result = ifft(yf)
-				if isinstance(result, tuple):
-					result = result[0]
-				arr = np.asarray(result)
-				return np.real(arr)
-			cs = CubicSpline(x, y)
-			logging.info("CubicSpline interpolation complete.")
-			x_new = np.linspace(x.min(), x.max(), 1000)
-			y_smooth = cs(x_new)
-			logging.info("Generated new x and smoothed y values.")
-			y_lp = lowpass_filter(y_smooth)
-			QApplication.processEvents()
-			logging.info("Lowpass filtered y values ready.")
+			# Work on numpy arrays
+			x = np.asarray(x)
+			y = np.asarray(y)
+			# Define objective for SG optimization: minimize MSE between y and filtered y
 			def sg_error(params):
-				logging.info("Starting Savitzky-Golay error calculation for perfect optimization of parameters.")
 				win = int(params[0])
 				if win % 2 == 0:
 					win += 1
-				win = max(5, min(win, len(y_lp)-1 if len(y_lp)%2==1 else len(y_lp)-2))
+				# Prevent oversmoothing: cap window to 0.2 * len(y) or len(y)-1 whichever smaller
+				max_cap = max(5, int(min(101, max(5, int(len(y) * 0.2)))))
+				if len(y) - 1 <= max_cap:
+					win = max(5, min(win, len(y)-1 if len(y)%2==1 else len(y)-2))
+				else:
+					win = max(5, min(win, max_cap))
 				poly = int(params[1])
 				poly = max(2, min(poly, win-1))
 				try:
-					y_sg = savgol_filter(y_lp, window_length=win, polyorder=poly)
-					return np.mean((y_lp - y_sg)**2)
+					y_sg = savgol_filter(y, window_length=win, polyorder=poly)
+					return float(np.mean((y - y_sg) ** 2))
 				except Exception:
 					return np.inf
-			win_max = min(101, len(y_lp)-1)
-			if win_max % 2 == 0:
-				win_max -= 1
-			search_space = [Integer(5, win_max), Integer(2, 5)]
-			logging.info("Starting Bayesian optimization for Savitzky-Golay parameters.")
+			# set bounds based on signal length, but cap window to 20% of length to avoid oversmoothing
+			win_upper = max(5, min(101, max(5, int(len(y) * 0.2))))
+			if win_upper % 2 == 0:
+				win_upper -= 1
+			search_space = [Integer(5, max(5, win_upper)), Integer(2, min(5, max(2, win_upper-1)))]
+			logging.info("Starting Bayesian optimization for Savitzky-Golay parameters (fast).")
 			opt_start = time.time()
-			result = gp_minimize(sg_error, search_space, n_calls=20, random_state=0)
+			result = gp_minimize(sg_error, search_space, n_calls=18, random_state=0)
 			if time.time() - opt_start > 30:
-				logging.warning("Savitzky-Golay optimization is taking unusually long (possible infinite loop).")
+				logging.warning("Savitzky-Golay optimization is taking unusually long.")
 				if not ErrorManager.errors_suppressed:
 					QMessageBox.warning(self.ui, "Warning", "Smoothing is taking unusually long. Please check your data or restart the app.")
 			if result is not None and hasattr(result, 'x'):
@@ -344,9 +338,13 @@ class AnalysisEngine:
 			if hasattr(self.ui, 'set_splash_text'):
 				self.ui.set_splash_text()
 			QApplication.processEvents()
-			y_final = savgol_filter(y_lp, window_length=win_opt, polyorder=poly_opt)
+			# Ensure window length is valid for savgol
+			if win_opt >= len(y):
+				win_opt = len(y) - 1 if (len(y) - 1) % 2 == 1 else len(y) - 2
+			y_final = savgol_filter(y, window_length=max(5, win_opt), polyorder=poly_opt)
 			self.ui.remove_countdown_gif_and_timer()
-			return x_new, y_final  # Return both x and y arrays
+			# Return original x, smoothed y, and sg parameters for downstream residual-aware fitting
+			return x, y_final, int(win_opt), int(poly_opt)
 		except Exception as e:
 			self.ui.remove_countdown_gif_and_timer()
 			logging.error(f"Error in smooth_curve: {e}")
@@ -354,7 +352,8 @@ class AnalysisEngine:
 				QMessageBox.critical(self.ui, "Error Smoothing Curve", f"An error occurred while smoothing the spectrum.\n\nError: {e}")
 			self.ui.restore_cursor()
 			self.rh.return_home_from_error()
-			return x, y
+			# Return best-effort values and default SG params on failure
+			return x, y, 11, 2
 
 	def align_curves_dtw(self, ref, query):
 		
@@ -391,117 +390,180 @@ class AnalysisEngine:
 			self.rh.return_home_from_error()
 			return query
 
-	def deconvolve_voigt(self, x, y):
+	def deconvolve_voigt(self, x, y, center_nm, window=30, baseline=None, sg_win=None, sg_poly=None):
+		"""
+		Deconvolve (fit) peaks in a window centered at center_nm +/- window.
+		Returns an array of same length as y with the fitted values on the window
+		and np.nan elsewhere so caller can reconstruct the full spectrum.
+		"""
 		try:
 			self.ui.show_countdown_gif(self.ui.progress_bar_row, self.ui.progress_container, trigger_type='progress', duration_ms=3000)
-			logging.info("Starting deconvolve_voigt method (multi-peak).")
+			logging.info(f"Starting deconvolve_voigt around {center_nm} +/- {window} nm.")
 			QApplication.processEvents()
-
-			# Detect all peaks (including faint ones)
-			from scipy.signal import find_peaks
-			peaks, _ = find_peaks(y, height=np.max(y)*0.05, prominence=np.max(y)*0.01, distance=max(1, int(len(x)/50)))
-			n_peaks = len(peaks)
-			logging.info(f"Detected {n_peaks} peaks for multi-peak fitting.")
-			if n_peaks == 0:
-				logging.warning("No peaks detected, using original data.")
+			x = np.asarray(x)
+			y = np.asarray(y)
+			mask = (x >= (center_nm - window)) & (x <= (center_nm + window))
+			if not np.any(mask):
+				logging.warning(f"No data in window for center {center_nm} nm; returning original segment.")
 				self.ui.remove_countdown_gif_and_timer()
-				return y
+				out = np.full_like(y, np.nan, dtype=float)
+				return out
+			x_seg = x[mask]
+			y_seg = y[mask]
+			# If baseline provided, compute residuals = original - baseline
+			if baseline is not None:
+				baseline_seg = baseline[mask]
+				resid = y_seg - baseline_seg
+			else:
+				resid = y_seg.copy()
 
-			# Prepare initial guesses for all peaks
-			amps = y[peaks]
-			cens = x[peaks]
-			sigmas = np.full(n_peaks, np.std(x)/10)
-			gammas = np.full(n_peaks, np.std(x)/10)
+			# Find local maxima in residual within the window
+			try:
+				peaks, _ = find_peaks(resid, height=np.max(resid) * 0.1)
+			except Exception:
+				peaks = np.array([], dtype=int)
 
-			# Multi-peak Voigt fitting with lmfit
-			def multi_voigt(x, *params):
-				total = np.zeros_like(x)
+			# Determine which peak is closest to center_nm in x-space
+			peak_idx = None
+			if peaks.size > 0:
+				# convert indices to wavelengths
+				peak_waves = x_seg[peaks]
+				closest = np.argmin(np.abs(peak_waves - center_nm))
+				peak_idx = peaks[closest]
+
+			# For 779 doublet, we may have two peaks; we'll try to detect up to 2 peaks
+			if center_nm == 779:
+				n_peaks = 2
+			else:
+				n_peaks = 1
+			# For narrow windows, attempt single or double peak depending on center (779 doublet)
+			if center_nm == 779:
+				n_peaks = 2
+			else:
+				n_peaks = 1
+
+			amps = np.maximum(resid, 0)
+			# initial guesses
+			from scipy.optimize import curve_fit
+
+			def multi_gauss(xa, *params):
+				res = np.zeros_like(xa)
+				for i in range(n_peaks):
+					amp = params[i*3]
+					cen = params[i*3+1]
+					sig = params[i*3+2]
+					res += amp * np.exp(-0.5 * ((xa - cen) / sig) ** 2)
+				return res
+
+			# Voigt profile helper
+			def voigt_profile(xv, amp, cen, sigma, gamma):
+				# ensure float operations
+				xv = np.array(xv, dtype=float)
+				z = ((xv - cen) + 1j * gamma) / (sigma * np.sqrt(2.0))
+				v = amp * np.real(wofz(z)) / (sigma * np.sqrt(2.0 * np.pi))
+				return v
+
+			def multi_voigt(xa, *params):
+				res = np.zeros_like(xa, dtype=float)
 				for i in range(n_peaks):
 					amp = params[i*4]
 					cen = params[i*4+1]
-					sigma = params[i*4+2]
-					gamma = params[i*4+3]
-					z = ((x - cen) + 1j * gamma) / (sigma * np.sqrt(2))
-					total += amp * np.real(wofz(z)) / (sigma * np.sqrt(2 * np.pi))
-				return total
+					sig = params[i*4+2]
+					gam = params[i*4+3]
+					res += voigt_profile(xa, amp, cen, sig, gam)
+				return res
 
-			fit_success = False
-			fit = None
+			p0 = []
+			bounds_low = []
+			bounds_high = []
+			centers = []
+			if n_peaks == 1:
+				# If a peak was located near center_nm, use its wavelength, else use center_nm
+				if peak_idx is not None:
+					centers = [float(x_seg[peak_idx])]
+				else:
+					centers = [center_nm]
+			else:
+				# For doublet, attempt to use two highest peaks if available, else fallback to offsets
+				if peaks.size >= 2:
+					# pick two peaks closest to center
+					sorted_peaks = peaks[np.argsort(np.abs(x_seg[peaks] - center_nm))][:2]
+					centers = [float(x_seg[p]) for p in sorted_peaks]
+				else:
+					centers = [center_nm - 6, center_nm + 6]
+
+			for i, c in enumerate(centers):
+				# amplitude guess: max of residual or segment scaled
+				amp_guess = float(np.max(resid)) if np.max(resid) > 0 else float(np.max(y_seg))
+				# p0: amp, cen, sigma, gamma
+				p0 += [amp_guess, float(c), max(0.5, (x_seg.max()-x_seg.min())/12.0), max(0.5, (x_seg.max()-x_seg.min())/12.0)]
+				bounds_low += [0, c - 10, 1e-3, 1e-3]
+				bounds_high += [amp_guess * 10 + 1 if amp_guess>0 else np.max(y_seg) * 10 + 1, c + 10, (x_seg.max()-x_seg.min()), (x_seg.max()-x_seg.min())]
+
+			# Fit to residual using lmfit VoigtModel(s)
 			try:
-				# Build lmfit Parameters
-				params = lmfit.Parameters()
-				for i in range(n_peaks):
-					params.add(f'amp{i}', value=amps[i], min=0)
-					params.add(f'cen{i}', value=cens[i], min=x.min(), max=x.max())
-					params.add(f'sigma{i}', value=sigmas[i], min=1e-6, max=(x.max()-x.min()))
-					params.add(f'gamma{i}', value=gammas[i], min=1e-6, max=(x.max()-x.min()))
-				def lmfit_multi_voigt(x, **kwargs):
-					p = [kwargs[f'amp{i}'] for i in range(n_peaks)] + [kwargs[f'cen{i}'] for i in range(n_peaks)] + [kwargs[f'sigma{i}'] for i in range(n_peaks)] + [kwargs[f'gamma{i}'] for i in range(n_peaks)]
-					# Reorder to amp, cen, sigma, gamma for each peak
-					p_ordered = []
-					for i in range(n_peaks):
-						p_ordered += [kwargs[f'amp{i}'], kwargs[f'cen{i}'], kwargs[f'sigma{i}'], kwargs[f'gamma{i}']]
-					return multi_voigt(x, *p_ordered)
-				model = lmfit.Model(lmfit_multi_voigt)
-				result = model.fit(y, params, x=x)
-				if not result.success or np.any(np.isnan(result.best_fit)):
-					raise RuntimeError(f"lmfit multi-peak Voigt fit failed: {result.message}")
-				fit = result.best_fit
-				fit_success = True
-				logging.info(f"lmfit multi-peak Voigt fit succeeded. Fit report: {result.fit_report()}")
-			except ImportError as e:
-				logging.error("lmfit is not installed. Please install lmfit for robust Voigt fitting.")
-				if not ErrorManager.errors_suppressed:
-					QMessageBox.warning(self.ui, "lmfit Not Installed", "The lmfit package is required for robust Voigt fitting. Falling back to scipy curve_fit.")
-				fit_success = False
-				fit = None
+				# ensure float arrays for lmfit
+				x_fit = np.array(x_seg, dtype=float)
+				resid_fit = np.array(resid, dtype=float)
+				if resid_fit.size == 0:
+					raise ValueError("Empty fit region")
+
+				# Build composite lmfit model with 1 or 2 Voigt components
+				from lmfit.models import VoigtModel
+				composite = None
+				for i, c in enumerate(centers):
+					prefix = f'v{i}_'
+					model = VoigtModel(prefix=prefix)
+					if composite is None:
+						composite = model
+					else:
+						composite = composite + model
+
+				if composite is None:
+					raise RuntimeError("No Voigt model constructed for fitting")
+				params = composite.make_params()
+				for i, c in enumerate(centers):
+					prefix = f'v{i}_'
+					amp_guess = float(np.max(resid_fit)) if np.max(resid_fit) > 0 else float(np.max(y_seg))
+					init_sigma = max(0.5, (x_seg.max() - x_seg.min()) / 12.0)
+					init_gamma = init_sigma
+					# set parameter initial guesses and bounds
+					params[f'{prefix}amplitude'].set(value=amp_guess, min=0)
+					params[f'{prefix}center'].set(value=float(c), min=float(c - 10), max=float(c + 10))
+					params[f'{prefix}sigma'].set(value=init_sigma, min=1e-3, max=float(x_seg.max() - x_seg.min()))
+					params[f'{prefix}gamma'].set(value=init_gamma, min=1e-3, max=float(x_seg.max() - x_seg.min()))
+
+				result = composite.fit(resid_fit, params, x=x_fit)
+				fitted_resid = result.best_fit.astype(float)
+				# add fitted residual back to baseline if provided
+				if baseline is not None:
+					fitted = baseline_seg.astype(float) + fitted_resid
+				else:
+					fitted = fitted_resid
+				logging.info(f"lmfit Voigt residual fit succeeded for center {center_nm} nm. Fit success: {result.success}")
 			except Exception as fit_err:
-				logging.warning(f"lmfit multi-peak Voigt fit failed with error: {fit_err}")
-				fit_success = False
-				fit = None
+				logging.warning(f"lmfit Voigt fit failed for center {center_nm}: {fit_err}")
+				# fallback: use baseline if present, else original segment
+				if baseline is not None:
+					fitted = baseline_seg.astype(float)
+				else:
+					fitted = y_seg.astype(float)
 
-			if not fit_success:
-				# Fallback: fit multiple Gaussians using scipy
-				from scipy.optimize import curve_fit
-				def multi_gauss(x, *params):
-					total = np.zeros_like(x)
-					for i in range(n_peaks):
-						amp = params[i*3]
-						cen = params[i*3+1]
-						sigma = params[i*3+2]
-						total += amp * np.exp(-0.5 * ((x - cen) / sigma) ** 2)
-					return total
-				p0 = []
-				for i in range(n_peaks):
-					p0 += [amps[i], cens[i], sigmas[i]]
-				try:
-					popt, _ = curve_fit(multi_gauss, x, y, p0=p0, maxfev=5000)
-					fit = multi_gauss(x, *popt)
-					logging.info("Fallback multi-peak Gaussian fit succeeded.")
-				except Exception as gauss_err:
-					logging.warning(f"Fallback multi-peak Gaussian fit also failed: {gauss_err}")
-					fit = y  # Use original data as fallback
-
+			out = np.full_like(y, np.nan, dtype=float)
+			out[mask] = fitted
 			if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
 				self.ui.progress_bar.setValue(50)
 			if hasattr(self.ui, 'set_splash_text'):
 				self.ui.set_splash_text()
 			QApplication.processEvents()
-			logging.info("Multi-peak Voigt (or fallback) fit complete.")
 			self.ui.remove_countdown_gif_and_timer()
-			return fit
+			return out
 		except Exception as e:
 			self.ui.remove_countdown_gif_and_timer()
-			logging.error(f"Error in deconvolve_voigt: {e}")
-			if hasattr(self.ui, 'progress_label'):
-				self.ui.progress_label.setText("Voigt fit failed, using original data...")
-				QApplication.processEvents()
+			logging.error(f"Error in deconvolve_voigt (windowed): {e}")
 			if not ErrorManager.errors_suppressed:
-				QMessageBox.warning(self.ui, "Voigt Fit Warning", f"Voigt profile fitting failed. The original data will be used for this region.\n\nError: {e}")
-			self.ui.close_all_message_boxes()
-			self.ui.restore_cursor()
-			self.rh.return_home_from_error()
-			return y
+				QMessageBox.warning(self.ui, "Voigt/Gauss Fit Warning", f"Fitting failed around {center_nm} nm. Using original data in that window.\n\nError: {e}")
+			return np.full_like(y, np.nan, dtype=float)
 
 	def compute_similarity_metrics(self, y_ctrl, y_sample):
 		
@@ -514,9 +576,15 @@ class AnalysisEngine:
 			X = np.vstack([y_ctrl, y_sample])
 			X_scaled = scaler.fit_transform(X)
 			logging.info("Data standardized for similarity metrics.")
-			pca = PCA(n_components=1)
-			pca.fit(X_scaled)
-			pca_score = np.abs(pca.components_[0][0] - pca.components_[0][1])
+			# PCA on two samples: we can use the explained variance ratio as a proxy
+			try:
+				pca = PCA(n_components=1)
+				pca.fit(X_scaled)
+				# components_ shape is (n_components, n_features)
+				# For two samples, use the variance explained as a stability proxy
+				pca_score = float(1 - pca.explained_variance_ratio_[0]) if hasattr(pca, 'explained_variance_ratio_') else 0.0
+			except Exception:
+				pca_score = 0.0
 			
 			if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
 				self.ui.progress_bar.setValue(65)
@@ -526,15 +594,17 @@ class AnalysisEngine:
 			QApplication.processEvents()
 			logging.info(f"PCA score computed: {pca_score}")
 			
-			pls = PLSRegression(n_components=2)
-			
+			# Use a safe number of PLS components: cannot exceed min(n_samples-1, n_features)
 			try:
+				n_samples = y_ctrl.reshape(-1, 1).shape[0]
+				n_components = min(1, max(1, n_samples - 1))
+				pls = PLSRegression(n_components=n_components)
 				pls.fit(y_ctrl.reshape(-1, 1), y_sample)
 				pls_score = pls.score(y_ctrl.reshape(-1, 1), y_sample)
 				logging.info(f"PLS score computed: {pls_score}")
-			except Exception:
+			except Exception as pls_err:
 				pls_score = 0
-				logging.info("PLS score computation failed, set to 0.")
+				logging.info(f"PLS score computation failed, set to 0. Error: {pls_err}")
 			
 			cos_sim = cosine_similarity(np.array([y_ctrl]), np.array([y_sample]))[0, 0]
 			pc_tuple = pearsonr(y_ctrl, y_sample)
@@ -549,7 +619,16 @@ class AnalysisEngine:
 			QApplication.processEvents()
 			logging.info(f"Cosine similarity: {cos_sim}, Pearson: {pearson_corr}, Euclidean: {euclid_dist}")
 			
-			auc_diff = np.abs(np.trapezoid(y_ctrl) - np.trapezoid(y_sample)) / np.trapezoid(y_ctrl)
+			# Guard against zero AUC in control to avoid divide-by-zero
+			try:
+				auc_ctrl = np.trapezoid(y_ctrl)
+				auc_sample = np.trapezoid(y_sample)
+				if np.isclose(auc_ctrl, 0.0):
+					auc_diff = np.abs(auc_ctrl - auc_sample)
+				else:
+					auc_diff = np.abs(auc_ctrl - auc_sample) / auc_ctrl
+			except Exception:
+				auc_diff = 1.0
 			sim_metrics = np.array([
 				cos_sim,
 				(float(pearson_corr) + 1) / 2,
@@ -612,17 +691,27 @@ class AnalysisEngine:
 			logging.info(f"Using positive control: {ctrl_name}")
 			if ctrl_name not in self.processed:
 				raise ValueError(f"Positive control '{ctrl_name}' not found in processed data.")
-			x_ctrl, y_ctrl = self.processed[ctrl_name]
-			regions_ctrl = self.segment_regions(x_ctrl, y_ctrl)
-			if not all(k in regions_ctrl for k in ['UVA', 'VIS', 'NIR']):
-				raise ValueError("One or more spectral regions are missing in the positive control.")
-			logging.info("Segmented positive control regions.")
-			y_uva_dec = self.deconvolve_voigt(*regions_ctrl['UVA'])
-			logging.info("Deconvolved UVA region for control.")
-			y_nir_dec = self.deconvolve_voigt(*regions_ctrl['NIR'])
-			logging.info("Deconvolved NIR region for control.")
-			_, y_vis = regions_ctrl['VIS']
-			y_ctrl_full = np.concatenate([y_uva_dec, y_vis, y_nir_dec])
+			x_ctrl, y_ctrl_sg, sg_win_ctrl, sg_poly_ctrl = self.processed[ctrl_name]
+			# Ensure raw absorbance dict exists and contains control
+			if self.absorbance is None or ctrl_name not in self.absorbance:
+				raise ValueError(f"Raw absorbance data missing for control '{ctrl_name}'.")
+			# original raw control
+			y_ctrl_raw = np.asarray(self.absorbance[ctrl_name])
+			# Define fixed centers and window
+			centers = [358, 435, 470, 779, 982]
+			window = 30
+			# Smooth control (already smoothed in preprocess_all_curves)
+			# Build reconstructed control by fitting each center and merging
+			# Start with SG baseline and add fitted residuals in windows
+			fitted_ctrl = np.array(y_ctrl_sg, dtype=float)
+			# apply deconvolution per center and overwrite only masked regions
+			for c in centers:
+				fitted_seg = self.deconvolve_voigt(x_ctrl, y_ctrl_raw, center_nm=c, window=window, baseline=y_ctrl_sg, sg_win=sg_win_ctrl, sg_poly=sg_poly_ctrl)
+				mask = ~np.isnan(fitted_seg)
+				if np.any(mask):
+					fitted_ctrl[mask] = fitted_seg[mask]
+			# final control full reconstructed curve
+			y_ctrl_full = fitted_ctrl
 			logging.info("Constructed full control curve.")
 			if hasattr(self.ui, 'progress_bar'):
 				self.ui.progress_bar.setValue(60)
@@ -631,26 +720,27 @@ class AnalysisEngine:
 			total = len(self.sample_names)
 			pvals = []
 			metrics_list = []
+			centers = [358, 435, 470, 779, 982]
+			window = 30
 			for idx, name in enumerate(self.sample_names):
 				sample_start = time.time()
 				logging.info(f"Analyzing sample {idx+1}/{total}: {name}")
 				if name not in self.processed:
 					raise ValueError(f"Sample '{name}' not found in processed data.")
-				x_sample, y_sample = self.processed[name]
-				regions_sample = self.segment_regions(x_sample, y_sample)
-				if not all(k in regions_sample for k in ['UVA', 'VIS', 'NIR']):
-					raise ValueError(f"One or more spectral regions are missing in sample '{name}'.")
-				logging.info(f"Segmented regions for {name}")
-				QApplication.processEvents()
-				y_uva_sample = self.deconvolve_voigt(*regions_sample['UVA'])
-				logging.info(f"Deconvolved UVA for {name}")
-				QApplication.processEvents()
-				y_nir_sample = self.deconvolve_voigt(*regions_sample['NIR'])
-				logging.info(f"Deconvolved NIR for {name}")
-				QApplication.processEvents()
-				_, y_vis_sample = regions_sample['VIS']
-				y_sample_full = np.concatenate([y_uva_sample, y_vis_sample, y_nir_sample])
-				metrics = self.compute_similarity_metrics(y_ctrl_full, y_sample_full)
+				x_sample, y_sample_sg, sg_win_sample, sg_poly_sample = self.processed[name]
+				# Ensure raw absorbance dict exists and contains sample
+				if self.absorbance is None or name not in self.absorbance:
+					raise ValueError(f"Raw absorbance data missing for sample '{name}'.")
+				# raw sample
+				y_sample_raw = np.asarray(self.absorbance[name])
+				# reconstruct full sample by fitting each center window and replacing
+				fitted_sample = np.array(y_sample_sg, dtype=float)
+				for c in centers:
+					fitted_seg = self.deconvolve_voigt(x_sample, y_sample_raw, center_nm=c, window=window, baseline=y_sample_sg, sg_win=sg_win_sample, sg_poly=sg_poly_sample)
+					mask = ~np.isnan(fitted_seg)
+					if np.any(mask):
+						fitted_sample[mask] = fitted_seg[mask]
+				metrics = self.compute_similarity_metrics(y_ctrl_full, fitted_sample)
 				logging.info(f"Computed similarity metrics for {name}")
 				metrics_list.append(metrics)
 				pvals.append(metrics['p_value'])
@@ -726,22 +816,7 @@ class AnalysisEngine:
 			return {}
 
 	def segment_regions(self, x, y):
-		"""
-		Segments the spectrum into UVA, VIS, and NIR regions.
-		Returns a dict: {'UVA': (x_uva, y_uva), ...}
-		"""
-		regions = {
-			'UVA': (350, 400),
-			'VIS': (400, 760),
-			'NIR': (760, 1020)
-		}
-		segmented = {}
-		for region, (lower, upper) in regions.items():
-			mask = (x >= lower) & (x <= upper)
-			if not np.any(mask):
-				continue
-			segmented[region] = (x[mask], y[mask])
-		return segmented
+		raise NotImplementedError("segment_regions has been removed. Deconvolution now uses fixed centers and windows.")
 
 	def permutation_p_value(self, y_ctrl, y_sample, sim_score, n_permutations=1000, random_state=None):
 		"""
@@ -765,9 +840,11 @@ class AnalysisEngine:
 				pca.fit(X_scaled)
 				pca_score = np.abs(pca.components_[0][0] - pca.components_[0][1])
 				
-				# Compute PLS score for every permutation (no skipping)
+				# Compute PLS score for every permutation (robust to small samples)
 				try:
-					pls = PLSRegression(n_components=2)
+					n_samples = y_ctrl.reshape(-1, 1).shape[0]
+					n_components = min(1, max(1, n_samples - 1))
+					pls = PLSRegression(n_components=n_components)
 					pls.fit(y_ctrl.reshape(-1, 1), permuted)
 					pls_score = pls.score(y_ctrl.reshape(-1, 1), permuted)
 				except Exception:

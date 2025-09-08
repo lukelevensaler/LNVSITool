@@ -16,7 +16,7 @@ class MLFittingUnitTests:
 		overfitting = False
 		log_msgs = []
 
-		# --- Pre-ML: Curve fitting checks (lmfit or fallback) ---
+		# --- Pre-ML: Curve fitting checks (lmfit) ---
 		# If fit results are stored, check residuals
 		if hasattr(self.analysis, 'fit_results') and isinstance(self.analysis.fit_results, dict):
 			for name, fit in self.analysis.fit_results.items():
