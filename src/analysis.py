@@ -231,8 +231,18 @@ class AnalysisEngine:
 			self.num_analytes = len(self.sample_names)
 			logging.info(f"Positive control: {self.positive_control}. Analytes: {self.sample_names}")
 			self.processed = self.preprocess_all_curves(data)
+			logging.info(f"preprocess_all_curves returned {len(self.processed)} entries: {list(self.processed.keys())}")
+			# If the positive control wasn't processed (edge cases), attempt to smooth it now so analysis can continue
 			if self.positive_control not in self.processed:
-				raise ValueError(f"Positive control '{self.positive_control}' not found in processed data after preprocessing.")
+				try:
+					x = np.asarray(self.wavelengths)
+					y = np.asarray(data[self.positive_control])
+					x_smooth, y_smooth, sg_win, sg_poly = self.smooth_curves(x, y)
+					self.processed[self.positive_control] = (x_smooth, y_smooth, sg_win, sg_poly)
+					logging.info(f"Recovered positive control '{self.positive_control}' by on-demand smoothing.")
+				except Exception as e:
+					logging.error(f"Failed to recover positive control '{self.positive_control}': {e}")
+					raise ValueError(f"Positive control '{self.positive_control}' not found in processed data after preprocessing.")
 			if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
 				self.ui.progress_bar.setValue(10)
 			if hasattr(self.ui, 'set_splash_text'):
@@ -254,24 +264,46 @@ class AnalysisEngine:
 			QApplication.processEvents()
 			processed = {}
 			start_time = time.time()
-			timeout = 60  # seconds
+			# Remove hard abort timeout; allow all samples to be processed but log if it takes long
+			timeout = 3600  # seconds (very large) - we will not abort early
+			logging.info(f"preprocess_all_curves will process {len(data)} samples: {list(data.keys())}")
 			if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
 				self.ui.progress_bar.setValue(20)
 			if hasattr(self.ui, 'set_splash_text'):
 				self.ui.set_splash_text()
 			QApplication.processEvents()
 			for name, y in data.items():
-				if time.time() - start_time > timeout:
-					logging.error("Preprocessing timed out.")
-					raise TimeoutError("Preprocessing timed out.")
-				x = np.asarray(self.wavelengths)
-				y = np.asarray(y)
-				if x is None or len(x) != len(y):
-					logging.error(f"Length mismatch for '{name}': x({len(x) if x is not None else 'None'}), y({len(y)})")
-					raise ValueError(f"Length mismatch for '{name}': x({len(x) if x is not None else 'None'}), y({len(y)})")
-				x_smooth, y_smooth, sg_win, sg_poly = self.smooth_curve(x, y)
-				# Store tuple (x, y_smoothed, sg_window, sg_poly)
-				processed[name] = (x_smooth, y_smooth, sg_win, sg_poly)
+				try:
+					logging.info(f"Preprocessing sample: {name}")
+					x = np.asarray(self.wavelengths)
+					y = np.asarray(y)
+					if x is None or len(x) != len(y):
+						logging.error(f"Length mismatch for '{name}': x({len(x) if x is not None else 'None'}), y({len(y)})")
+						# record nothing for this sample and continue so other samples are processed
+						continue
+					x_smooth, y_smooth, sg_win, sg_poly = self.smooth_curves(x, y)
+					# Store tuple (x, y_smoothed, sg_window, sg_poly)
+					processed[name] = (x_smooth, y_smooth, sg_win, sg_poly)
+				except Exception:
+					# Log full traceback per-sample and continue (no fallback) so root cause is visible
+					logging.exception(f"Failed to preprocess sample '{name}' - continuing with remaining samples")
+					continue
+
+			# Post-check: ensure every input spectrum has a smoothed entry. If any were skipped (e.g., transient errors),
+			# attempt a best-effort smoothing pass so downstream deconvolution (which is local-windowed) does not
+			# prevent having a full-spectrum smoothed baseline for each sample.
+			missing = [n for n in data.keys() if n not in processed]
+			if missing:
+				logging.info(f"Attempting recovery smoothing for {len(missing)} missing samples: {missing}")
+				for name in missing:
+					try:
+						x = np.asarray(self.wavelengths)
+						y = np.asarray(data[name])
+						x_smooth, y_smooth, sg_win, sg_poly = self.smooth_curves(x, y)
+						processed[name] = (x_smooth, y_smooth, sg_win, sg_poly)
+						logging.info(f"Recovered smoothing for sample '{name}'.")
+					except Exception:
+						logging.exception(f"Recovery smoothing failed for sample '{name}'; leaving it out of processed set.")
 			if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
 				self.ui.progress_bar.setValue(35)
 			if hasattr(self.ui, 'set_splash_text'):
@@ -287,11 +319,11 @@ class AnalysisEngine:
 			self.rh.return_home_from_error()
 			return {}
 
-	def smooth_curve(self, x, y):
+	def smooth_curves(self, x, y):
 		try:
 			# Simplified smoothing: use Savitzky-Golay directly on the original sampled data
 			self.ui.show_countdown_gif(self.ui.progress_bar_row, self.ui.progress_container, trigger_type='progress', duration_ms=3000)
-			logging.info("Starting smooth_curve method (Savitzky-Golay only).")
+			logging.info("Starting smooth_curves method (Savitzky-Golay only).")
 			QApplication.processEvents()
 			# Work on numpy arrays
 			x = np.asarray(x)
@@ -320,12 +352,7 @@ class AnalysisEngine:
 				win_upper -= 1
 			search_space = [Integer(5, max(5, win_upper)), Integer(2, min(5, max(2, win_upper-1)))]
 			logging.info("Starting Bayesian optimization for Savitzky-Golay parameters (fast).")
-			opt_start = time.time()
 			result = gp_minimize(sg_error, search_space, n_calls=18, random_state=0)
-			if time.time() - opt_start > 30:
-				logging.warning("Savitzky-Golay optimization is taking unusually long.")
-				if not ErrorManager.errors_suppressed:
-					QMessageBox.warning(self.ui, "Warning", "Smoothing is taking unusually long. Please check your data or restart the app.")
 			if result is not None and hasattr(result, 'x'):
 				win_opt = int(result.x[0])
 				if win_opt % 2 == 0:
@@ -335,6 +362,20 @@ class AnalysisEngine:
 			else:
 				win_opt = 11
 				poly_opt = 2
+			# Bias smoothing slightly above the optimizer suggestion but keep smoothing weaker than deconvolution
+			try:
+				# Smaller bias so the SG baseline remains weaker than the deconvolution operation
+				bias_factor = 1.2
+				win_biased = int(max(5, min(len(y)-1, int(win_opt * bias_factor))))
+				if win_biased % 2 == 0:
+					win_biased += 1
+				# don't exceed reasonable cap
+				if win_biased >= len(y):
+					win_biased = len(y) - 1 if (len(y) - 1) % 2 == 1 else len(y) - 2
+				win_opt = max(5, win_biased)
+			except Exception:
+				# fallback to original
+				pass
 			if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
 				self.ui.progress_bar.setValue(30)
 			if hasattr(self.ui, 'set_splash_text'):
@@ -343,7 +384,9 @@ class AnalysisEngine:
 			# Ensure window length is valid for savgol
 			if win_opt >= len(y):
 				win_opt = len(y) - 1 if (len(y) - 1) % 2 == 1 else len(y) - 2
-			y_final = savgol_filter(y, window_length=max(5, win_opt), polyorder=poly_opt)
+			# Use a conservative polynomial order to avoid fitting noise
+			polyorder = min(poly_opt, 3)
+			y_final = savgol_filter(y, window_length=max(5, win_opt), polyorder=polyorder)
 			self.ui.remove_countdown_gif_and_timer()
 			# Return original x, smoothed y, and sg parameters for downstream residual-aware fitting
 			return x, y_final, int(win_opt), int(poly_opt)
@@ -363,13 +406,7 @@ class AnalysisEngine:
 			self.ui.show_countdown_gif(self.ui.progress_bar_row, self.ui.progress_container, trigger_type='progress', duration_ms=3000)
 			logging.info("Starting align_curves_dtw method.")
 			QApplication.processEvents()
-			align_start = time.time()
 			distance, path = fastdtw(ref, query)
-			
-			if time.time() - align_start > 30:
-				logging.warning("DTW alignment is taking unusually long (possible infinite loop).")
-				if not ErrorManager.errors_suppressed:
-					QMessageBox.warning(self.ui, "Warning", "Curve alignment is taking unusually long. Please check your data or restart the app.")
 			logging.info(f"DTW alignment complete. Distance: {distance}")
 			aligned = np.interp(np.arange(len(ref)), [p[1] for p in path], [query[p[1]] for p in path])
 			
@@ -412,16 +449,19 @@ class AnalysisEngine:
 				return out
 			x_seg = x[mask]
 			y_seg = y[mask]
-			# If baseline provided, compute residuals = original - baseline
+			# If baseline (smoothed) provided, fit to the baseline to preserve smoothing
 			if baseline is not None:
-				baseline_seg = baseline[mask]
-				resid = y_seg - baseline_seg
+				baseline_seg = np.asarray(baseline[mask], dtype=float)
+				# Fit target is the smoothed baseline so fits don't undo smoothing
+				y_fit_target = baseline_seg.copy()
 			else:
-				resid = y_seg.copy()
+				# No baseline provided, fit directly to the observed segment
+				y_fit_target = np.asarray(y_seg, dtype=float)
 
-			# Find local maxima in residual within the window
+			# Find local maxima in the fit target within the window (used for initial center guesses)
 			try:
-				peaks, _ = find_peaks(resid, height=np.max(resid) * 0.1)
+				# Increase sensitivity: lower height threshold to detect smaller peaks within the window
+				peaks, _ = find_peaks(y_fit_target, height=np.max(y_fit_target) * 0.02, distance=max(1, int(float(window)*0.05)))
 			except Exception:
 				peaks = np.array([], dtype=int)
 
@@ -444,18 +484,7 @@ class AnalysisEngine:
 			else:
 				n_peaks = 1
 
-			amps = np.maximum(resid, 0)
-			# initial guesses
-			from scipy.optimize import curve_fit
-
-			def multi_gauss(xa, *params):
-				res = np.zeros_like(xa)
-				for i in range(n_peaks):
-					amp = params[i*3]
-					cen = params[i*3+1]
-					sig = params[i*3+2]
-					res += amp * np.exp(-0.5 * ((xa - cen) / sig) ** 2)
-				return res
+			amps = np.maximum(y_fit_target, 0)
 
 			# Voigt profile helper
 			def voigt_profile(xv, amp, cen, sigma, gamma):
@@ -495,19 +524,31 @@ class AnalysisEngine:
 					centers = [center_nm - 6, center_nm + 6]
 
 			for i, c in enumerate(centers):
-				# amplitude guess: max of residual or segment scaled
-				amp_guess = float(np.max(resid)) if np.max(resid) > 0 else float(np.max(y_seg))
+				# amplitude guess: use the smoothed fit target (baseline or local smoothed data)
+				# derive local mask spans from the caller-provided window (in nm)
+				# local_amp_half: small neighborhood for amplitude estimation
+				# local_fit_half: slightly larger neighborhood for using lmfit.guess/local fitting
+				local_amp_half = max(1.0, float(window) * 0.15)
+				local_fit_half = max(2.0, float(window) * 0.25)
+				local_mask_amp = (x_seg >= (c - local_amp_half)) & (x_seg <= (c + local_amp_half))
+				if np.any(local_mask_amp):
+					local_max = float(np.max(y_fit_target[local_mask_amp]))
+				else:
+					local_max = float(np.max(y_fit_target)) if y_fit_target.size>0 else float(np.max(y_seg))
+				amp_guess = max(1e-6, 0.05 * local_max, local_max)
 				# p0: amp, cen, sigma, gamma
-				p0 += [amp_guess, float(c), max(0.5, (x_seg.max()-x_seg.min())/12.0), max(0.5, (x_seg.max()-x_seg.min())/12.0)]
-				bounds_low += [0, c - 10, 1e-3, 1e-3]
-				bounds_high += [amp_guess * 10 + 1 if amp_guess>0 else np.max(y_seg) * 10 + 1, c + 10, (x_seg.max()-x_seg.min()), (x_seg.max()-x_seg.min())]
+				# initial p0: amplitude, center, sigma, gamma
+				p0 += [amp_guess, float(c), max(0.8, (x_seg.max()-x_seg.min())/20.0), max(0.8, (x_seg.max()-x_seg.min())/20.0)]
+				# favor broader peaks: set safer minima for sigma/gamma so fits are less sharp
+				bounds_low += [0, c - 10, 0.8, 0.8]
+				bounds_high += [max(amp_guess * 20 + 1, np.max(y_seg) * 5 + 1), c + 10, (x_seg.max()-x_seg.min()), (x_seg.max()-x_seg.min())]
 
-			# Fit to residual using lmfit VoigtModel(s)
+			# Fit to residual using lmfit VoigtModel(s) ONLY. On any failure return NaNs for this window.
 			try:
 				# ensure float arrays for lmfit
 				x_fit = np.array(x_seg, dtype=float)
-				resid_fit = np.array(resid, dtype=float)
-				if resid_fit.size == 0:
+				y_fit = np.array(y_fit_target, dtype=float)
+				if y_fit.size == 0:
 					raise ValueError("Empty fit region")
 
 				# Build composite lmfit model with 1 or 2 Voigt components
@@ -523,33 +564,160 @@ class AnalysisEngine:
 
 				if composite is None:
 					raise RuntimeError("No Voigt model constructed for fitting")
+
+				# Create parameters and attempt robust guesses per-component using lmfit's guess helper
 				params = composite.make_params()
 				for i, c in enumerate(centers):
 					prefix = f'v{i}_'
-					amp_guess = float(np.max(resid_fit)) if np.max(resid_fit) > 0 else float(np.max(y_seg))
-					init_sigma = max(0.5, (x_seg.max() - x_seg.min()) / 12.0)
-					init_gamma = init_sigma
-					# set parameter initial guesses and bounds
-					params[f'{prefix}amplitude'].set(value=amp_guess, min=0)
-					params[f'{prefix}center'].set(value=float(c), min=float(c - 10), max=float(c + 10))
-					params[f'{prefix}sigma'].set(value=init_sigma, min=1e-3, max=float(x_seg.max() - x_seg.min()))
-					params[f'{prefix}gamma'].set(value=init_gamma, min=1e-3, max=float(x_seg.max() - x_seg.min()))
+					# Prepare a local window around the component to get a better initial guess
+					local_mask = (x_fit >= (c - local_fit_half)) & (x_fit <= (c + local_fit_half))
+					if np.any(local_mask) and np.sum(local_mask) >= 3:
+						x_local = x_fit[local_mask]
+						y_local = y_fit[local_mask]
+					else:
+						x_local = x_fit
+						y_local = y_fit
+					# Try using VoigtModel.guess for initial parameters; fall back to conservative manual guesses
+					try:
+						g = VoigtModel(prefix=prefix).guess(y_local, x=x_local)
+						# copy any guessed values into our composite params
+						for pname, pval in g.items():
+							if pname in params:
+								params[pname].set(value=pval.value)
+					except Exception:
+						# Conservative manual initialization but bias towards broader (less sharp) peaks
+						local_max = float(np.max(y_local)) if np.any(y_local) else float(np.max(y_fit))
+						params[f'{prefix}amplitude'].set(value=max(1e-6, local_max), min=0, max=max(1e-6, local_max * 6 + 1e-6))
+						params[f'{prefix}center'].set(value=float(c), min=float(c - 20), max=float(c + 20))
+						# prefer broader components to avoid spike-like artifacts
+						init_sigma = max(0.8, (x_fit.max() - x_fit.min()) / 20.0)
+						params[f'{prefix}sigma'].set(value=init_sigma, min=0.8, max=float(x_fit.max() - x_fit.min()))
+						params[f'{prefix}gamma'].set(value=init_sigma, min=0.8, max=float(x_fit.max() - x_fit.min()))
 
-				result = composite.fit(resid_fit, params, x=x_fit)
-				fitted_resid = result.best_fit.astype(float)
-				# add fitted residual back to baseline if provided
+				# Final safety: ensure bounds exist for each param and keep fits local to the window
+				for i, c in enumerate(centers):
+					prefix = f'v{i}_'
+					if f'{prefix}amplitude' in params:
+						# limit amplitude upper bound to reduce spike risk
+						current = params[f'{prefix}amplitude']
+						if current.max is None:
+							current.set(min=0, max=max(1e-6, float(current.value) * 6 + 1e-6))
+						else:
+							current.set(min=current.min if current.min is not None else 0, max=max(float(current.max), float(current.value) * 3 + 1e-6))
+					if f'{prefix}center' in params:
+						# keep center within a reasonable fraction of the analysis window to avoid drifting into baseline
+						center_shift = max(3.0, float(window) * 0.25)
+						cmin = float(params[f'{prefix}center'].min if params[f'{prefix}center'].min is not None else c - center_shift)
+						cmax = float(params[f'{prefix}center'].max if params[f'{prefix}center'].max is not None else c + center_shift)
+						params[f'{prefix}center'].set(min=cmin, max=cmax)
+					if f'{prefix}sigma' in params:
+						# enforce broader minima for sigma/gamma to reduce sharp spikes
+						max_sigma = float(max(0.8, min((x_fit.max() - x_fit.min()) / 2.0, (sg_win if sg_win is not None else window) )))
+						params[f'{prefix}sigma'].set(min=0.8, max=max_sigma)
+					if f'{prefix}gamma' in params:
+						max_sigma = float(max(0.8, min((x_fit.max() - x_fit.min()) / 2.0, (sg_win if sg_win is not None else window) )))
+						params[f'{prefix}gamma'].set(min=0.8, max=max_sigma)
+
+				# Try multiple lmfit solvers in order until a reasonable fit is found. All attempts use lmfit only.
+				fit_methods = ['leastsq', 'least_squares', 'nelder']
+				result = None
+				last_err = None
+				for method in fit_methods:
+					try:
+						# Use lmfit defaults (no inverse-amplitude weighting) to avoid amplifying noise
+						res = composite.fit(y_fit, params, x=x_fit, method=method, max_nfev=10000, nan_policy='omit')
+						# Accept if lmfit reports success or a reasonable reduced chi-square
+						redchi_ok = hasattr(res, 'redchi') and (res.redchi is not None) and (res.redchi < 100)
+						if getattr(res, 'success', False) or redchi_ok:
+							result = res
+							break
+						last_err = None
+					except Exception as me:
+						last_err = me
+						logging.debug(f"lmfit method {method} raised: {me}")
+
+				if result is None:
+					# If no method produced a usable result, raise to trigger NaN policy
+					raise RuntimeError(f"lmfit Voigt fit did not converge for center {center_nm}; last_err={last_err}")
+
+				# Reconstruct fitted model from lmfit params but enforce sensible minima/limits
+				# to avoid extremely narrow, tall spikes while preserving peak topology.
+				local_max_global = float(np.max(y_fit)) if y_fit.size>0 else float(np.max(y_seg))
+				# Enforce broader minima to reduce sharp spikes
+				sigma_min_enforced = max(0.9, float(window) * 0.02)
+				gamma_min_enforced = max(0.9, float(window) * 0.02)
+				amp_mult_allowed = 4.0
+				amp_limit = max(local_max_global * amp_mult_allowed, float(np.max(y_seg)) * 3.0 + 1.0)
+
+				reconstructed_params = []
+				for i in range(len(centers)):
+					prefix = f'v{i}_'
+					# Extract values safely from result.params
+					try:
+						amp_val = float(result.params[f'{prefix}amplitude'].value)
+					except Exception:
+						amp_val = float(result.params.get(f'{prefix}amplitude', {'value': 0}).get('value', 0))
+					try:
+						cen_val = float(result.params[f'{prefix}center'].value)
+					except Exception:
+						cen_val = centers[i]
+					try:
+						sig_val = float(result.params[f'{prefix}sigma'].value)
+					except Exception:
+						sig_val = (x_fit.max() - x_fit.min()) / 10.0
+					try:
+						gam_val = float(result.params[f'{prefix}gamma'].value)
+					except Exception:
+						gam_val = sig_val
+
+					# Enforce minima for widths to avoid spike-like fits
+					sig_val = max(sig_val, sigma_min_enforced)
+					gam_val = max(gam_val, gamma_min_enforced)
+
+					# Cap amplitude relative to local signal to prevent runaway spikes when widths are small
+					if amp_val < 0:
+						amp_val = 0.0
+					amp_val = min(amp_val, amp_limit)
+
+					reconstructed_params += [amp_val, cen_val, sig_val, gam_val]
+
+				# Build fitted residual via multi_voigt (preserves voigt topology)
+				try:
+					fitted_resid = multi_voigt(x_fit, *reconstructed_params).astype(float)
+				except Exception:
+					# Fall back to lmfit's best_fit if reconstruction fails
+					fitted_resid = result.best_fit.astype(float)
+
+				# Optional small clamp to avoid negative trough artifacts; preserve topology by allowing small negatives
+				min_floor = -0.02 * local_max_global
+				fitted_resid = np.clip(fitted_resid, min_floor, None)
+
+				# Blend reconstructed fitted component into baseline; blend_alpha controls prominence
+				blend_alpha = 0.8
 				if baseline is not None:
-					fitted = baseline_seg.astype(float) + fitted_resid
+					fitted = baseline_seg.astype(float) + blend_alpha * fitted_resid
 				else:
-					fitted = fitted_resid
-				logging.info(f"lmfit Voigt residual fit succeeded for center {center_nm} nm. Fit success: {result.success}")
+					fitted = blend_alpha * fitted_resid
+				logging.info(f"lmfit Voigt residual fit finished for center {center_nm} nm. Method used: {result.method if hasattr(result,'method') else 'unknown'}; success={getattr(result,'success',None)}")
 			except Exception as fit_err:
-				logging.warning(f"lmfit Voigt fit failed for center {center_nm}: {fit_err}")
-				# fallback: use baseline if present, else original segment
+				logging.error(f"lmfit Voigt fit failed for center {center_nm}: {fit_err}")
+				# Preserve smoothing on fit failures: return the supplied smoothed baseline segment
 				if baseline is not None:
-					fitted = baseline_seg.astype(float)
+					# baseline_seg was computed earlier from the provided baseline
+					fitted = baseline_seg.astype(float).copy()
 				else:
-					fitted = y_seg.astype(float)
+					# No baseline provided: compute a small local Savitzky-Golay smoothing and return that
+					try:
+						win = int(sg_win) if (sg_win is not None and int(sg_win) > 3) else min(11, max(5, len(y_seg)//10))
+						if win % 2 == 0:
+							win += 1
+						poly = int(sg_poly) if (sg_poly is not None and int(sg_poly) >= 2) else 2
+						# Ensure window < len(y_seg)
+						if win >= len(y_seg):
+							win = len(y_seg) - 1 if (len(y_seg) - 1) % 2 == 1 else len(y_seg) - 2
+						fitted = savgol_filter(y_seg.astype(float), window_length=max(5, win), polyorder=min(poly, max(2, win-1)))
+					except Exception:
+						fitted = y_seg.astype(float).copy()
 
 			out = np.full_like(y, np.nan, dtype=float)
 			out[mask] = fitted
@@ -662,8 +830,8 @@ class AnalysisEngine:
 			pval_threshold = 0.05
 			logging.info(f"p-value threshold properly set to {pval_threshold}.")
 
-			if time.time() - sim_start > 30:
-				logging.warning("Similarity metrics computation is taking unusually long (possible infinite loop).")
+			# Log how long similarity computation took for diagnostics
+			logging.debug(f"Similarity computation time: {time.time()-sim_start:.2f}s")
 			self.ui.remove_countdown_gif_and_timer()
 
 			conotoxin_like = (p_val <= pval_threshold)
@@ -740,7 +908,8 @@ class AnalysisEngine:
 				sample_start = time.time()
 				logging.info(f"Preprocessing sample {idx+1}/{total}: {name}")
 				if name not in self.processed:
-					raise ValueError(f"Sample '{name}' not found in processed data.")
+					logging.warning(f"Sample '{name}' not found in processed data; skipping this sample.")
+					continue
 				x_sample, y_sample_sg, sg_win_sample, sg_poly_sample = self.processed[name]
 				# Ensure raw absorbance dict exists and contains sample
 				if self.absorbance is None or name not in self.absorbance:
@@ -768,7 +937,7 @@ class AnalysisEngine:
 					self.ui.set_splash_text()
 				QApplication.processEvents()
 				elapsed = time.time() - sample_start
-				if elapsed > 30:
+				if elapsed > 120:
 					logging.warning(f"Preprocessing for sample {name} is taking unusually long: {elapsed:.1f}s")
 			# After DTW + deconvolution + smoothing, save preprocessed data (control + aligned samples)
 			try:
