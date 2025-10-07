@@ -868,7 +868,7 @@ class AnalysisEngine:
 			# original raw control
 			y_ctrl_raw = np.asarray(self.absorbance[ctrl_name])
 			# Define fixed centers and window
-			centers = [358, 435, 470, 779, 982]
+			centers = [358, 435, 470, 779, 982, 1000]
 			window = 30
 			# Smooth control (already smoothed in preprocess_all_curves)
 			# Build reconstructed control by fitting each center and merging
@@ -902,7 +902,8 @@ class AnalysisEngine:
 			QApplication.processEvents()
 			# First pass: perform deconvolution and DTW alignment for all samples and store reconstructed spectra
 			total = len(self.sample_names)
-			centers = [358, 435, 470, 779, 982]
+			# Redifine fixed centers and window
+			centers = [358, 435, 470, 779, 982, 1000]
 			window = 30
 			for idx, name in enumerate(self.sample_names):
 				sample_start = time.time()
