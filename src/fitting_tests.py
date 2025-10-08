@@ -90,6 +90,21 @@ class MLFittingUnitTests:
 				overfitting = True
 				log_msgs.append("Overfitting detected: all results are identical across samples")
 
+		# --- Test Bayesian optimization for SG parameters ---
+		try:
+			bayesian_underfit, bayesian_overfit = self.test_bayesian_optimize_win_and_poly()
+			if bayesian_underfit:
+				underfitting = True
+				log_msgs.append("Underfitting detected in Bayesian optimization for SG parameters")
+			if bayesian_overfit:
+				overfitting = True
+				log_msgs.append("Overfitting detected in Bayesian optimization for SG parameters")
+		except Exception as bayesian_err:
+			logging.error(f"Bayesian optimization tests raised an exception: {bayesian_err}")
+			# Consider test failure as a sign of potential underfitting in the optimization process
+			underfitting = True
+			log_msgs.append("Bayesian optimization test failed - potential underfitting in parameter selection")
+
 		# ---- Log all detected issues ----
 		for msg in log_msgs:
 			logging.warning(msg)
@@ -97,3 +112,52 @@ class MLFittingUnitTests:
 			logging.info("No overfitting or underfitting detected in any pipeline step.")
 
 		return underfitting, overfitting
+
+	def test_bayesian_optimize_win_and_poly(self):
+		"""Test the Bayesian optimization function for SG parameters"""
+		try:
+			# Create test data - simulate spectral data
+			wavelengths = np.linspace(300, 1200, 500)
+			test_data = {
+				"sample1": np.exp(-(wavelengths - 450)**2 / 100) + 0.1 * np.random.random(len(wavelengths)),
+				"sample2": np.exp(-(wavelengths - 780)**2 / 200) + 0.2 * np.random.random(len(wavelengths)),
+				"positive_control": (np.exp(-(wavelengths - 358)**2 / 50) + 
+									np.exp(-(wavelengths - 435)**2 / 60) +
+									np.exp(-(wavelengths - 779)**2 / 90) +
+									0.03 * np.random.random(len(wavelengths)))
+			}
+			
+			logging.info("Testing bayesian_optimize_win_and_poly function...")
+			optimal_win, optimal_poly = self.analysis.bayesian_optimize_win_and_poly(test_data, wavelengths)
+			
+			# Validate results and detect issues
+			bayesian_underfit = False
+			bayesian_overfit = False
+			
+			if not isinstance(optimal_win, int) or not isinstance(optimal_poly, int):
+				bayesian_overfit = True
+				logging.error("Bayesian optimization returned invalid types")
+			elif optimal_win < 5 or optimal_poly < 2:
+				bayesian_underfit = True
+				logging.error("Bayesian optimization parameters too small (underfitting)")
+			elif optimal_win >= len(wavelengths) or optimal_poly >= optimal_win:
+				bayesian_overfit = True
+				logging.error("Bayesian optimization parameters too large (overfitting)")
+			elif optimal_win % 2 == 0:
+				bayesian_overfit = True
+				logging.error("Bayesian optimization returned even window size")
+			
+			# Test edge cases
+			empty_win, empty_poly = self.analysis.bayesian_optimize_win_and_poly({}, wavelengths)
+			if empty_win != 11 or empty_poly != 2:
+				bayesian_underfit = True
+				logging.error("Bayesian optimization failed edge case test")
+			
+			if not bayesian_underfit and not bayesian_overfit:
+				logging.info("✓ Bayesian optimization tests passed")
+			
+			return bayesian_underfit, bayesian_overfit
+			
+		except Exception as e:
+			logging.error(f"Bayesian optimization test failed: {e}")
+			return True, False  # Consider test failure as underfitting

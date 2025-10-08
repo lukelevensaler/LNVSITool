@@ -30,25 +30,30 @@ from sklearn.preprocessing import StandardScaler
 
 # PyQt6 GUI Imports
 from PyQt6.QtWidgets import (
-	QApplication, QFileDialog, 
+	QFileDialog, 
 	QMessageBox
 )
 from PyQt6.QtCore import QTimer, QElapsedTimer, Qt
+
+# Import QApplication only when needed to avoid circular import issues
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+	from PyQt6.QtWidgets import QApplication
 
 # Core Imports
 from utils import FDRUtils, ErrorManager # error pausing checks for every error-related QMessageBox instance in this file specifically
 from loop_manger import ReturnHome
 from config import (
 	qfiledialog__pinned_locations,
-	LOG_FILE as global_logging_file,
-	AUTO_SAVE_RESULTS_FILE as AUTO_SAVE_RESULTS_FILE
+	LOG_FILE,
+	AUTO_SAVE_RESULTS_FILE
 )
 from fitting_tests import MLFittingUnitTests
 import os
 import hashlib
 
 logging.basicConfig(
-	filename= global_logging_file,
+	filename= LOG_FILE,
 	level=logging.DEBUG,
 	format='%(asctime)s - %(levelname)s - %(message)s - %(lineno)d'
 )
@@ -267,11 +272,18 @@ class AnalysisEngine:
 			# Remove hard abort timeout; allow all samples to be processed but log if it takes long
 			timeout = 3600  # seconds (very large) - we will not abort early
 			logging.info(f"preprocess_all_curves will process {len(data)} samples: {list(data.keys())}")
+			
+			# First, run global Bayesian optimization to determine optimal SG parameters for the entire dataset
+			logging.info("Running global Bayesian optimization for Savitzky-Golay parameters.")
+			optimal_win, optimal_poly = self.bayesian_optimize_win_and_poly(data, self.wavelengths)
+			logging.info(f"Global optimization results: window={optimal_win}, polyorder={optimal_poly}")
+			
 			if hasattr(self.ui, 'progress_bar') and self.ui.progress_bar is not None:
 				self.ui.progress_bar.setValue(20)
 			if hasattr(self.ui, 'set_splash_text'):
 				self.ui.set_splash_text()
 			QApplication.processEvents()
+			
 			for name, y in data.items():
 				try:
 					logging.info(f"Preprocessing sample: {name}")
@@ -281,7 +293,8 @@ class AnalysisEngine:
 						logging.error(f"Length mismatch for '{name}': x({len(x) if x is not None else 'None'}), y({len(y)})")
 						# record nothing for this sample and continue so other samples are processed
 						continue
-					x_smooth, y_smooth, sg_win, sg_poly = self.smooth_curves(x, y)
+					# Use the globally optimized parameters
+					x_smooth, y_smooth, sg_win, sg_poly = self.smooth_curves(x, y, win_opt=optimal_win, poly_opt=optimal_poly)
 					# Store tuple (x, y_smoothed, sg_window, sg_poly)
 					processed[name] = (x_smooth, y_smooth, sg_win, sg_poly)
 				except Exception:
@@ -299,7 +312,8 @@ class AnalysisEngine:
 					try:
 						x = np.asarray(self.wavelengths)
 						y = np.asarray(data[name])
-						x_smooth, y_smooth, sg_win, sg_poly = self.smooth_curves(x, y)
+						# Use the globally optimized parameters for recovery too
+						x_smooth, y_smooth, sg_win, sg_poly = self.smooth_curves(x, y, win_opt=optimal_win, poly_opt=optimal_poly)
 						processed[name] = (x_smooth, y_smooth, sg_win, sg_poly)
 						logging.info(f"Recovered smoothing for sample '{name}'.")
 					except Exception:
@@ -319,49 +333,178 @@ class AnalysisEngine:
 			self.rh.return_home_from_error()
 			return {}
 
-	def smooth_curves(self, x, y):
+	def bayesian_optimize_win_and_poly(self, data_dict, wavelengths):
+		"""
+		Dynamically determine optimal Savitzky-Golay window and polynomial order
+		across the entire dataset using Bayesian optimization.
+		
+		Args:
+			data_dict: Dictionary mapping sample names to their absorbance arrays
+			wavelengths: Array of wavelength values
+			
+		Returns:
+			tuple: (optimal_window, optimal_polyorder)
+		"""
+		try:
+			logging.info("Starting Bayesian optimization for SG parameters across entire dataset.")
+			QApplication.processEvents()
+			
+			# Collect all y-arrays from the dataset
+			all_y_arrays = []
+			min_length = float('inf')
+			
+			for name, y_data in data_dict.items():
+				y = np.asarray(y_data)
+				if len(y) > 0:
+					all_y_arrays.append(y)
+					min_length = min(min_length, len(y))
+			
+			if not all_y_arrays or min_length == 0:
+				logging.warning("No valid data arrays found for optimization, using defaults.")
+				return 11, 2
+			
+			# Define objective function that evaluates across all samples
+			def sg_error_global(params):
+				win = int(params[0])
+				if win % 2 == 0:
+					win += 1
+				poly = int(params[1])
+				
+				# Validate parameters
+				if win <= poly or win < 5 or poly < 2:
+					return np.inf
+				
+				total_error = 0.0
+				valid_samples = 0
+				
+				for y in all_y_arrays:
+					try:
+						# Ensure window doesn't exceed signal length
+						actual_win = min(win, len(y) - 1 if len(y) % 2 == 1 else len(y) - 2)
+						if actual_win < 5:
+							continue
+						
+						# Ensure polynomial order is valid for this window
+						actual_poly = min(poly, actual_win - 1)
+						if actual_poly < 2:
+							continue
+						
+						y_sg = savgol_filter(y, window_length=actual_win, polyorder=actual_poly)
+						
+						# Use MSE as optimization criterion
+						mse = np.mean((y - y_sg) ** 2)
+						total_error += mse
+						valid_samples += 1
+						
+					except Exception:
+						# Skip this sample if filtering fails
+						continue
+				
+				if valid_samples == 0:
+					return np.inf
+				
+				# Return average MSE across all valid samples
+				return total_error / valid_samples
+			
+			# Set optimization bounds based on minimum signal length and dataset characteristics
+			max_win_cap = max(5, min(101, int(min_length * 0.2)))  # 20% of shortest signal
+			if max_win_cap % 2 == 0:
+				max_win_cap -= 1
+			
+			# Conservative bounds to prevent oversmoothing
+			win_lower = 5
+			win_upper = max(5, max_win_cap)
+			poly_lower = 2
+			poly_upper = min(5, max(2, win_upper - 1))
+			
+			search_space = [
+				Integer(win_lower, win_upper),
+				Integer(poly_lower, poly_upper)
+			]
+			
+			logging.info(f"Optimizing SG parameters with bounds: window [{win_lower}, {win_upper}], poly [{poly_lower}, {poly_upper}]")
+			
+			# Run Bayesian optimization with more calls for better convergence
+			result = gp_minimize(
+				sg_error_global, 
+				search_space, 
+				n_calls=25,  # Increased for better optimization across dataset
+				random_state=0,
+				acq_func='EI'  # Expected Improvement acquisition function
+			)
+			
+			if result is not None and hasattr(result, 'x') and len(result.x) >= 2:
+				win_opt = int(result.x[0])
+				if win_opt % 2 == 0:
+					win_opt += 1
+				poly_opt = int(result.x[1])
+				poly_opt = max(2, min(poly_opt, win_opt - 1))
+				
+				logging.info(f"Bayesian optimization completed. Optimal parameters: window={win_opt}, poly={poly_opt}")
+				return win_opt, poly_opt
+			else:
+				logging.warning("Bayesian optimization failed, using conservative defaults.")
+				return 11, 2
+				
+		except Exception as e:
+			logging.error(f"Error in bayesian_optimize_win_and_poly: {e}")
+			return 11, 2  # Return safe defaults on any error
+
+	def smooth_curves(self, x, y, win_opt=None, poly_opt=None):
 		try:
 			# Simplified smoothing: use Savitzky-Golay directly on the original sampled data
 			self.ui.show_countdown_gif(self.ui.progress_bar_row, self.ui.progress_container, trigger_type='progress', duration_ms=3000)
 			logging.info("Starting smooth_curves method (Savitzky-Golay only).")
 			QApplication.processEvents()
+			
 			# Work on numpy arrays
 			x = np.asarray(x)
 			y = np.asarray(y)
-			# Define objective for SG optimization: minimize MSE between y and filtered y
-			def sg_error(params):
-				win = int(params[0])
-				if win % 2 == 0:
-					win += 1
-				# Prevent oversmoothing: cap window to 0.2 * len(y) or len(y)-1 whichever smaller
-				max_cap = max(5, int(min(101, max(5, int(len(y) * 0.2)))))
-				if len(y) - 1 <= max_cap:
-					win = max(5, min(win, len(y)-1 if len(y)%2==1 else len(y)-2))
+			
+			# Use provided optimal parameters if available, otherwise use individual optimization
+			if win_opt is None or poly_opt is None:
+				logging.info("No pre-computed SG parameters provided, running individual optimization.")
+				
+				# Define objective for SG optimization: minimize MSE between y and filtered y
+				def sg_error(params):
+					win = int(params[0])
+					if win % 2 == 0:
+						win += 1
+					# Prevent oversmoothing: cap window to 0.2 * len(y) or len(y)-1 whichever smaller
+					max_cap = max(5, int(min(101, max(5, int(len(y) * 0.2)))))
+					if len(y) - 1 <= max_cap:
+						win = max(5, min(win, len(y)-1 if len(y)%2==1 else len(y)-2))
+					else:
+						win = max(5, min(win, max_cap))
+					poly = int(params[1])
+					poly = max(2, min(poly, win-1))
+					try:
+						y_sg = savgol_filter(y, window_length=win, polyorder=poly)
+						return float(np.mean((y - y_sg) ** 2))
+					except Exception:
+						return np.inf
+				
+				# Set bounds based on signal length, but cap window to 20% of length to avoid oversmoothing
+				win_upper = max(5, min(101, max(5, int(len(y) * 0.2))))
+				if win_upper % 2 == 0:
+					win_upper -= 1
+				search_space = [Integer(5, max(5, win_upper)), Integer(2, min(5, max(2, win_upper-1)))]
+				
+				logging.info("Starting individual Bayesian optimization for Savitzky-Golay parameters.")
+				result = gp_minimize(sg_error, search_space, n_calls=18, random_state=0)
+				
+				if result is not None and hasattr(result, 'x'):
+					win_opt = int(result.x[0])
+					if win_opt % 2 == 0:
+						win_opt += 1
+					poly_opt = int(result.x[1])
+					poly_opt = max(2, min(poly_opt, win_opt-1))
 				else:
-					win = max(5, min(win, max_cap))
-				poly = int(params[1])
-				poly = max(2, min(poly, win-1))
-				try:
-					y_sg = savgol_filter(y, window_length=win, polyorder=poly)
-					return float(np.mean((y - y_sg) ** 2))
-				except Exception:
-					return np.inf
-			# set bounds based on signal length, but cap window to 20% of length to avoid oversmoothing
-			win_upper = max(5, min(101, max(5, int(len(y) * 0.2))))
-			if win_upper % 2 == 0:
-				win_upper -= 1
-			search_space = [Integer(5, max(5, win_upper)), Integer(2, min(5, max(2, win_upper-1)))]
-			logging.info("Starting Bayesian optimization for Savitzky-Golay parameters (fast).")
-			result = gp_minimize(sg_error, search_space, n_calls=18, random_state=0)
-			if result is not None and hasattr(result, 'x'):
-				win_opt = int(result.x[0])
-				if win_opt % 2 == 0:
-					win_opt += 1
-				poly_opt = int(result.x[1])
-				poly_opt = max(2, min(poly_opt, win_opt-1))
+					win_opt = 11
+					poly_opt = 2
 			else:
-				win_opt = 11
-				poly_opt = 2
+				logging.info(f"Using pre-computed optimal SG parameters: window={win_opt}, poly={poly_opt}")
+			
 			# Bias smoothing slightly above the optimizer suggestion but keep smoothing weaker than deconvolution
 			try:
 				# Smaller bias so the SG baseline remains weaker than the deconvolution operation
@@ -1075,7 +1218,7 @@ class AnalysisEngine:
 	def save_preprocessed_data(self, aligned_dict, aligned_order, y_ctrl_full):
 		"""
 		Save the preprocessed (smoothed, deconvolved, DTW-aligned) spectra to a CSV file.
-		Writes to a repo-local utilities/Autosaves folder with timestamped filename.
+		Writes to the Autosaves directory with timestamped filename.
 		Parameters:
 		- aligned_dict: mapping from sample name -> aligned numpy array
 		- aligned_order: list of sample names in the order they were processed
@@ -1085,7 +1228,7 @@ class AnalysisEngine:
 			logging.info("Saving preprocessed data to CSV (save_preprocessed_data).")
 			# Attempt to save into configured autosave dir (parent of AUTO_SAVE_RESULTS_FILE)
 			saving_tag = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-			preferred_dir = os.path.dirname(AUTO_SAVE_RESULTS_FILE)
+			save_smooths_dir = os.path.dirname(AUTO_SAVE_RESULTS_FILE)
 			fname = None
 			# Build DataFrame
 			nm_col = np.asarray(self.wavelengths)
@@ -1110,31 +1253,18 @@ class AnalysisEngine:
 			base_fname = f'preprocessed_input_{saving_tag}_{content_hash[:8]}.csv'
 			# Try preferred autosave location first
 			try:
-				if not os.path.exists(preferred_dir):
-					os.makedirs(preferred_dir, exist_ok=True)
-				fname_pref = os.path.join(preferred_dir, base_fname)
+				if not os.path.exists(save_smooths_dir):
+					os.makedirs(save_smooths_dir, exist_ok=True)
+				fname_pref = os.path.join(save_smooths_dir, base_fname)
 				# If file already exists, no need to overwrite
 				if not os.path.exists(fname_pref):
 					with open(fname_pref, 'wb') as f:
 						f.write(csv_bytes)
 				fname = fname_pref
-				logging.info(f"Saved preprocessed input CSV to preferred autosave dir: {fname_pref}")
+				logging.info(f"Saved preprocessed input CSV to the ~/LNVSI Tool Utilities/Autosaves directory: {fname_pref}")
 			except Exception as pref_err:
-				logging.warning(f"Preferred autosave dir write failed: {pref_err}")
-			# Fallback to repo-local utilities/Autosaves
-			if fname is None:
-				repo_autosave_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'utilities', 'Autosaves')
-				try:
-					os.makedirs(repo_autosave_dir, exist_ok=True)
-					fname_fb = os.path.join(repo_autosave_dir, base_fname)
-					# If file already exists, skip writing
-					if not os.path.exists(fname_fb):
-						with open(fname_fb, 'wb') as f:
-							f.write(csv_bytes)
-					fname = fname_fb
-					logging.info(f"Saved preprocessed input CSV to repo-local fallback: {fname_fb}")
-				except Exception as fb_err:
-					logging.warning(f"Fallback autosave dir write failed: {fb_err}")
+				logging.warning(f"Write to the ~/LNVSI Tool Utilities/Autosaves directory failed: {pref_err}")
+    
 			# Cache last saved content hash and path to avoid duplicate writes later
 			if fname is not None:
 				self._last_preprocessed_hash = content_hash
@@ -1224,7 +1354,14 @@ class AnalysisEngine:
 			underfit, overfit = self.fitting_tester.test_fittings()
 		except Exception as test_err:
 			logging.error(f"Fitting tests raised an exception: {test_err}")
-			underfit, overfit = False, False
+			# Check if the error might be related to Bayesian optimization issues
+			error_msg = str(test_err).lower()
+			if any(keyword in error_msg for keyword in ['bayesian', 'optimization', 'window', 'polynomial', 'savgol']):
+				logging.error("Exception appears to be related to Bayesian optimization for SG parameters")
+				# Treat Bayesian optimization failures as potential underfitting in parameter selection
+				underfit, overfit = True, False
+			else:
+				underfit, overfit = False, False
 
 		# Build the message box once
 		report_box = QMessageBox(self.ui)
