@@ -19,7 +19,7 @@ from skopt import gp_minimize
 from skopt.space import Integer
 from fastdtw import fastdtw # type: ignore
 import decimal
-import lmfit
+# from lmfit.models import VoigtModel done at deconvolution runtime
 import warnings
 
 # Machine Learning Imports
@@ -682,7 +682,13 @@ class AnalysisEngine:
 				# p0: amp, cen, sigma, gamma
 				# initial p0: amplitude, center, sigma, gamma
 				p0 += [amp_guess, float(c), max(0.8, (x_seg.max()-x_seg.min())/20.0), max(0.8, (x_seg.max()-x_seg.min())/20.0)]
-				# favor broader peaks: set safer minima for sigma/gamma so fits are less sharp
+				
+    			# We favor broader peaks: set safer minima for sigma/gamma so fits are less sharp
+				"""
+    			THIS IS CRITICAL !!!
+    			- AVOIDS SPIKE-LIKE ARTIFACTS ON SIGNIFICANT FEATURES 
+       			- AVOIDS ERRONEOUS AMPLIFICATION OF INSIGNIFICANT FEATURES
+          		"""
 				bounds_low += [0, c - 10, 0.8, 0.8]
 				bounds_high += [max(amp_guess * 20 + 1, np.max(y_seg) * 5 + 1), c + 10, (x_seg.max()-x_seg.min()), (x_seg.max()-x_seg.min())]
 
