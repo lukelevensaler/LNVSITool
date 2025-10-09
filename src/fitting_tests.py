@@ -128,7 +128,7 @@ class MLFittingUnitTests:
 			}
 			
 			logging.info("Testing bayesian_optimize_win_and_poly function...")
-			optimal_win, optimal_poly = self.analysis.bayesian_optimize_win_and_poly(test_data, wavelengths)
+			optimal_win, optimal_poly = self.analysis.ppr.bayesian_savgol_optimize_win_and_poly(test_data, wavelengths)
 			
 			# Validate results and detect issues
 			bayesian_underfit = False
@@ -148,7 +148,7 @@ class MLFittingUnitTests:
 				logging.error("Bayesian optimization returned even window size")
 			
 			# Test edge cases
-			empty_win, empty_poly = self.analysis.bayesian_optimize_win_and_poly({}, wavelengths)
+			empty_win, empty_poly = self.analysis.ppr.bayesian_savgol_optimize_win_and_poly({}, wavelengths)
 			if empty_win != 11 or empty_poly != 2:
 				bayesian_underfit = True
 				logging.error("Bayesian optimization failed edge case test")

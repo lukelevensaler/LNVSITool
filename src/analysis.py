@@ -25,14 +25,15 @@ from sklearn.preprocessing import StandardScaler
 # PyQt6 GUI Imports
 from PyQt6.QtWidgets import (
 	QFileDialog, 
-	QMessageBox
+	QMessageBox,
+	QApplication
 )
 from PyQt6.QtCore import QTimer, QElapsedTimer, Qt
 
 # Import QApplication only when needed to avoid circular import issues
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-	from PyQt6.QtWidgets import QApplication
+	pass  # QApplication now imported above for runtime use
 
 # Core Imports
 from utils import FDRUtils, ErrorManager # error pausing checks for every error-related QMessageBox instance in this file specifically

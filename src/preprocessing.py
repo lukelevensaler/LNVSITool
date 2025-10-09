@@ -16,12 +16,12 @@ from config import LOG_FILE
 from utils import ErrorManager # error pausing checks for every error-related QMessageBox instance in this file specifically
 
 # PyQt6 GUI Imports
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox, QApplication
 
 # Import QApplication only when needed to avoid circular import issues
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-	from PyQt6.QtWidgets import QApplication
+	pass
  
 # Suppress a noisy but non-fatal warning coming from the 'uncertainties' package
 # which some downstream libraries may use when an uncertainty's std_dev==0.
@@ -161,7 +161,7 @@ class Preprocessor:
                 return 11, 2
                 
         except Exception as e:
-            logging.error(f"Error in bayesian_optimize_win_and_poly: {e}")
+            logging.error(f"Error in bayesian_savgol_optimize_win_and_poly: {e}")
             return 11, 2  # Return safe defaults on any error
 
     def smooth_curves(self, x, y, win_opt=None, poly_opt=None):
