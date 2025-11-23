@@ -342,17 +342,6 @@ class Preprocessor:
                 closest = np.argmin(np.abs(peak_waves - center_nm))
                 peak_idx = peaks[closest]
 
-            # For 779 doublet, we may have two peaks; we'll try to detect up to 2 peaks
-            if center_nm == 779:
-                n_peaks = 2
-            else:
-                n_peaks = 1
-            # For narrow windows, attempt single or double peak depending on center (779 doublet)
-            if center_nm == 779:
-                n_peaks = 2
-            else:
-                n_peaks = 1
-
             amps = np.maximum(y_fit_target, 0)
 
             # Voigt profile helper
