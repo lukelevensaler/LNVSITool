@@ -463,9 +463,12 @@ class AnalysisEngine:
 				raise ValueError(f"Raw absorbance data missing for control '{ctrl_name}'.")
 			# original raw control
 			y_ctrl_raw = np.asarray(self.absorbance[ctrl_name])
+			
 			# Define fixed centers and window
-			centers = [358, 435, 470, 779, 982, 1000]
+			# cysteine monodentate, cysteine bidentate, cysteine tridentate, tetraguaiacol, n-term, amidated c-term, unamidated c-term
+			centers = [380, 435, 355, 470, 779, 982, 1000]
 			window = 30
+			
 			# Smooth control (already smoothed in preprocess_all_curves)
 			# Build reconstructed control by fitting each center and merging
 			# Start with SG baseline and add fitted residuals in windows
