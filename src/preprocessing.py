@@ -344,6 +344,17 @@ class Preprocessor:
 
             amps = np.maximum(y_fit_target, 0)
 
+            # Determine how many Voigt components to use in this window
+            n_peaks = 1
+            if peaks.size >= 2:
+                # Count peaks that sit close to the target center so we only split real doublets
+                close_mask = np.abs(x_seg[peaks] - center_nm) <= max(2.0, float(window) * 0.2)
+                if np.sum(close_mask) >= 2:
+                    n_peaks = 2
+            elif any(abs(center_nm - doublet) <= 1.5 for doublet in (435.0, 470.0)):
+                # Known biochemical doublets benefit from two-component fits even if one side is weak
+                n_peaks = 2
+
             # Voigt profile helper
             def voigt_profile(xv, amp, cen, sigma, gamma):
                 # ensure float operations
